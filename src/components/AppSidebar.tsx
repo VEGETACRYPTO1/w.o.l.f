@@ -34,7 +34,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="font-heading text-xs tracking-widest uppercase text-muted-foreground">
-            {!collapsed && "SK10 JARVIS"}
+            {!collapsed && "W.O.L.F."}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

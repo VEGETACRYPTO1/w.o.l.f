@@ -242,7 +242,7 @@ export default function Dashboard() {
         className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-center"
       >
         <h1 className="text-xl font-heading font-bold tracking-wide text-foreground/90">
-          SK10
+          W.O.L.F.
         </h1>
       </motion.div>
 

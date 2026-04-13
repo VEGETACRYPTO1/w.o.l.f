@@ -60,7 +60,7 @@ function ParticleSphere({ color }: { color: string }) {
       ref.current.rotation.y += 0.0015;
       ref.current.rotation.x += 0.0005;
       // Breathing
-      const scale = 1 + Math.sin(t * 0.5) * 0.04;
+      const scale = 1 + Math.sin(t * 0.8) * 0.12;
       ref.current.scale.setScalar(scale);
     }
     if (matRef.current) {
