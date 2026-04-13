@@ -52,47 +52,37 @@ interface PopupConfig {
   id: PopupId;
   label: string;
   icon: React.ReactNode;
-  position: string; // tailwind classes
+  // anchor as percentages [top%, left%]
+  anchor: [number, number];
 }
 
 const popups: PopupConfig[] = [
-  {
-    id: "ops",
-    label: "Today's Ops",
-    icon: <Sparkles className="h-3.5 w-3.5" />,
-    position: "top-[12%] left-[5%]",
-  },
-  {
-    id: "nonneg",
-    label: "Non-Negotiables",
-    icon: <Shield className="h-3.5 w-3.5" />,
-    position: "top-[12%] right-[5%]",
-  },
-  {
-    id: "goals",
-    label: "Goals",
-    icon: <Target className="h-3.5 w-3.5" />,
-    position: "bottom-[28%] left-[5%]",
-  },
-  {
-    id: "habits",
-    label: "Habits",
-    icon: <Activity className="h-3.5 w-3.5" />,
-    position: "bottom-[28%] right-[5%]",
-  },
-  {
-    id: "stats",
-    label: "Performance",
-    icon: <BarChart3 className="h-3.5 w-3.5" />,
-    position: "bottom-[8%] left-[50%] -translate-x-1/2",
-  },
-  {
-    id: "mode",
-    label: "Mode",
-    icon: <ChevronRight className="h-3.5 w-3.5" />,
-    position: "top-[50%] right-[3%] -translate-y-1/2",
-  },
+  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [12, 5] },
+  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [12, 68] },
+  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [65, 5] },
+  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [65, 70] },
+  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [85, 35] },
+  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [42, 78] },
 ];
+
+// Generate random drift keyframes for each popup
+function useFloatAnimation(count: number) {
+  return useMemo(() => {
+    return Array.from({ length: count }, () => {
+      const duration = 8 + Math.random() * 7; // 8-15s
+      const xAmplitude = 10 + Math.random() * 20; // 10-30px
+      const yAmplitude = 8 + Math.random() * 16; // 8-24px
+      // random number of keyframe steps
+      const steps = 4 + Math.floor(Math.random() * 3);
+      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
+      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
+      // loop back to start
+      xKeys.push(xKeys[0]);
+      yKeys.push(yKeys[0]);
+      return { duration, xKeys, yKeys };
+    });
+  }, [count]);
+}
 
 const priorityDot: Record<string, string> = {
   high: "bg-primary",
