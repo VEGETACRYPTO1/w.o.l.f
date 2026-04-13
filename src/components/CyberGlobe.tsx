@@ -12,6 +12,7 @@ const modeColors: Record<string, string> = {
   war: "#FF3B3B",
   rebuild: "#4090e0",
   expansion: "#40b870",
+  relax: "#3db89a",
 };
 
 // ── Bloom ──
