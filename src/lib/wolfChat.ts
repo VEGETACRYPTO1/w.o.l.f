@@ -34,6 +34,16 @@ export async function streamWolfChat({
       return;
     }
 
+    // Check if response is JSON (action result) vs SSE stream
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await resp.json();
+      const text = data.reply || data.actions?.map((a: any) => a.result).join("\n") || "Done.";
+      onDelta(text);
+      onDone();
+      return;
+    }
+
     if (!resp.body) {
       onError("No response stream");
       return;
