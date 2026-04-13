@@ -80,11 +80,21 @@ export default {
           "0%, 100%": { opacity: "0.4" },
           "50%": { opacity: "1" },
         },
+        "icon-glow-pulse": {
+          "0%, 100%": { boxShadow: "0 0 4px 1px rgba(255,214,10,0.15), inset 0 0 4px 1px rgba(255,214,10,0.08)" },
+          "50%": { boxShadow: "0 0 12px 3px rgba(255,214,10,0.35), inset 0 0 8px 2px rgba(255,214,10,0.15)" },
+        },
+        "icon-glow-pulse-outer": {
+          "0%, 100%": { boxShadow: "0 0 8px 2px rgba(255,214,10,0.05)", opacity: "0.3" },
+          "50%": { boxShadow: "0 0 18px 6px rgba(255,214,10,0.18)", opacity: "0.7" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "pulse-glow": "pulse-glow 2s ease-in-out infinite",
+        "icon-glow-pulse": "icon-glow-pulse 3s ease-in-out infinite",
+        "icon-glow-pulse-outer": "icon-glow-pulse-outer 3s ease-in-out infinite 0.5s",
       },
     },
   },

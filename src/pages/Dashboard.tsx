@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
@@ -52,7 +52,6 @@ interface PopupConfig {
   id: PopupId;
   label: string;
   icon: React.ReactNode;
-  // anchor as percentages [top%, left%]
   anchor: [number, number];
 }
 
@@ -65,13 +64,12 @@ const popups: PopupConfig[] = [
   { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
-// Generate random drift keyframes for each popup
 function useFloatAnimation(count: number) {
   return useMemo(() => {
     return Array.from({ length: count }, () => {
-      const duration = 20 + Math.random() * 15; // 20-35s for slower movement
-      const xAmplitude = 30 + Math.random() * 40; // 30-70% range
-      const yAmplitude = 20 + Math.random() * 30; // 20-50% range
+      const duration = 20 + Math.random() * 15;
+      const xAmplitude = 30 + Math.random() * 40;
+      const yAmplitude = 20 + Math.random() * 30;
       const steps = 5 + Math.floor(Math.random() * 4);
       const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
       const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
@@ -82,15 +80,51 @@ function useFloatAnimation(count: number) {
   }, [count]);
 }
 
-const priorityDot: Record<string, string> = {
-  high: "bg-primary",
-  medium: "bg-muted-foreground",
-  low: "bg-muted-foreground/40",
-};
+// Particle burst component
+function ParticleBurst({ active }: { active: boolean }) {
+  const particles = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => {
+      const angle = (i / 12) * Math.PI * 2;
+      const distance = 30 + Math.random() * 25;
+      return {
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance,
+        delay: Math.random() * 0.1,
+        size: 2 + Math.random() * 3,
+      };
+    });
+  }, []);
+
+  if (!active) return null;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {particles.map((p, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            width: p.size,
+            height: p.size,
+            background: "linear-gradient(135deg, #FFD60A, #FFC300)",
+            left: "50%",
+            top: "50%",
+            marginLeft: -p.size / 2,
+            marginTop: -p.size / 2,
+          }}
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+          animate={{ x: p.x, y: p.y, opacity: 0, scale: 0.2 }}
+          transition={{ duration: 0.5, delay: p.delay, ease: "easeOut" }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
+  const [burstId, setBurstId] = useState<PopupId | null>(null);
   const floatAnims = useFloatAnimation(popups.length);
   const { config, mode } = useMode();
 
@@ -98,6 +132,12 @@ export default function Dashboard() {
 
   const toggle = (id: string) =>
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+
+  const handleExpand = useCallback((id: PopupId) => {
+    setExpanded(id);
+    setBurstId(id);
+    setTimeout(() => setBurstId(null), 600);
+  }, []);
 
   const renderExpanded = (id: PopupId) => {
     switch (id) {
@@ -195,7 +235,7 @@ export default function Dashboard() {
 
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Greeting - top center */}
+      {/* Greeting */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -259,12 +299,16 @@ export default function Dashboard() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ scale: 1.15 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => setExpanded(popup.id)}
-                className="glass-card h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary hover:border-primary/30 transition-colors group"
+                onClick={() => handleExpand(popup.id)}
+                className="relative h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary transition-colors group glass-card"
               >
-                <span className="group-hover:animate-pulse-glow">{popup.icon}</span>
+                {/* Golden glow pulse ring */}
+                <span className="absolute inset-0 rounded-full animate-icon-glow-pulse" />
+                <span className="absolute inset-[-3px] rounded-full animate-icon-glow-pulse-outer" />
+                <span className="relative z-10 group-hover:animate-pulse-glow">{popup.icon}</span>
+                <ParticleBurst active={burstId === popup.id} />
               </motion.button>
             )}
           </AnimatePresence>
