@@ -55,6 +55,13 @@ interface PopupConfig {
   anchor: [number, number];
 }
 
+interface FloatAnimationConfig {
+  duration: number;
+  xKeys: number[];
+  yKeys: number[];
+  scaleKeys: number[];
+}
+
 const popups: PopupConfig[] = [
   { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [20, 15] },
   { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [15, 55] },
@@ -64,18 +71,28 @@ const popups: PopupConfig[] = [
   { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
+function buildRandomWalkKeys(steps: number, maxStep: number, clamp: number) {
+  const keys = [0];
+  let current = 0;
+  for (let i = 1; i < steps; i++) {
+    current += (Math.random() - 0.5) * maxStep;
+    current = Math.max(-clamp, Math.min(clamp, current));
+    keys.push(current);
+  }
+  keys.push(keys[0]);
+  return keys;
+}
+
 function useFloatAnimation(count: number) {
-  return useMemo(() => {
+  return useMemo<FloatAnimationConfig[]>(() => {
     return Array.from({ length: count }, () => {
-      const duration = 20 + Math.random() * 15;
-      const xAmplitude = 30 + Math.random() * 40;
-      const yAmplitude = 20 + Math.random() * 30;
-      const steps = 5 + Math.floor(Math.random() * 4);
-      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
-      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
-      xKeys.push(xKeys[0]);
-      yKeys.push(yKeys[0]);
-      return { duration, xKeys, yKeys };
+      const steps = 10 + Math.floor(Math.random() * 6);
+      return {
+        duration: 26 + Math.random() * 18,
+        xKeys: buildRandomWalkKeys(steps, 22, 90),
+        yKeys: buildRandomWalkKeys(steps, 18, 70),
+        scaleKeys: Array.from({ length: steps + 1 }, () => 0.94 + Math.random() * 0.22),
+      };
     });
   }, [count]);
 }

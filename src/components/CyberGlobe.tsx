@@ -41,9 +41,8 @@ function ParticleSphere({ color }: { color: string }) {
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
-  const mousePos = useRef(new THREE.Vector3(100, 100, 0)); // far away initially
-  const isActive = useRef(false);
   const originalPositions = useRef<Float32Array | null>(null);
+  const pointer = useRef({ x: 0, y: 0, active: false });
 
   const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -58,102 +57,91 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
-  // Convert mouse screen position to 3D world coordinates on a plane at z=0
-  const { gl, camera } = useThree();
-  const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const ndcMouse = useMemo(() => new THREE.Vector2(), []);
+  const { size } = useThree();
 
   useEffect(() => {
-    const canvas = gl.domElement;
-    const onMove = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      ndcMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      ndcMouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(ndcMouse, camera);
-      // Intersect with a plane at z=0 to get world position
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-      const target = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, target);
-      if (target) mousePos.current.copy(target);
-      isActive.current = true;
+    const setPointer = (clientX: number, clientY: number) => {
+      pointer.current.x = (clientX / window.innerWidth) * 2 - 1;
+      pointer.current.y = -(clientY / window.innerHeight) * 2 + 1;
+      pointer.current.active = true;
     };
-    const onLeave = () => {
-      isActive.current = false;
+
+    const onMove = (event: PointerEvent) => setPointer(event.clientX, event.clientY);
+    const onTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) setPointer(touch.clientX, touch.clientY);
     };
-    canvas.addEventListener("pointermove", onMove);
-    canvas.addEventListener("pointerleave", onLeave);
-    // Also handle touch
-    const onTouch = (e: TouchEvent) => {
-      if (e.touches.length === 0) return;
-      const touch = e.touches[0];
-      const rect = canvas.getBoundingClientRect();
-      ndcMouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-      ndcMouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(ndcMouse, camera);
-      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-      const target = new THREE.Vector3();
-      raycaster.ray.intersectPlane(plane, target);
-      if (target) mousePos.current.copy(target);
-      isActive.current = true;
+    const onTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (touch) setPointer(touch.clientX, touch.clientY);
     };
-    const onTouchEnd = () => { isActive.current = false; };
-    canvas.addEventListener("touchmove", onTouch, { passive: true });
-    canvas.addEventListener("touchstart", onTouch, { passive: true });
-    canvas.addEventListener("touchend", onTouchEnd);
+    const onEnd = () => {
+      pointer.current.active = false;
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerdown", onMove);
+    window.addEventListener("pointerup", onEnd);
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+
     return () => {
-      canvas.removeEventListener("pointermove", onMove);
-      canvas.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("touchmove", onTouch);
-      canvas.removeEventListener("touchstart", onTouch);
-      canvas.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerdown", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onEnd);
     };
-  }, [gl, camera, raycaster, ndcMouse]);
+  }, []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     if (!ref.current || !originalPositions.current) return;
 
-    const geo = ref.current.geometry;
-    const posAttr = geo.attributes.position as THREE.BufferAttribute;
+    const posAttr = ref.current.geometry.attributes.position as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const orig = originalPositions.current;
-    const mp = mousePos.current;
+    const pointerWorldX = pointer.current.x * radius * (size.width / Math.max(size.height, 1));
+    const pointerWorldY = pointer.current.y * radius;
 
     for (let i = 0; i < count * 3; i += 3) {
-      const ox = orig[i], oy = orig[i + 1], oz = orig[i + 2];
+      const ox = orig[i];
+      const oy = orig[i + 1];
+      const oz = orig[i + 2];
 
-      // Distance from this particle to the mouse ray intersection point
-      const dx = ox - mp.x;
-      const dy = oy - mp.y;
-      const dz = oz - mp.z;
-      const distToMouse = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      let tx = ox;
+      let ty = oy;
+      let tz = oz;
 
-      // Repulsion: particles close to mouse get pushed outward strongly
-      const influenceRadius = 1.8;
-      let tx = ox, ty = oy, tz = oz;
+      if (pointer.current.active) {
+        const dx = ox - pointerWorldX;
+        const dy = oy - pointerWorldY;
+        const planarDistance = Math.sqrt(dx * dx + dy * dy);
+        const influenceRadius = 1.15;
 
-      if (isActive.current && distToMouse < influenceRadius) {
-        const strength = (1 - distToMouse / influenceRadius) * 0.6;
-        const distFromCenter = Math.sqrt(ox * ox + oy * oy + oz * oz);
-        // Push radially outward from sphere center
-        tx = ox + (ox / distFromCenter) * strength;
-        ty = oy + (oy / distFromCenter) * strength;
-        tz = oz + (oz / distFromCenter) * strength;
+        if (planarDistance < influenceRadius) {
+          const falloff = 1 - planarDistance / influenceRadius;
+          const radialLength = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+          const outward = 0.55 * falloff;
+          const jitter = Math.sin(t * 6 + i * 0.015) * 0.03 * falloff;
+          tx = ox + (ox / radialLength) * (outward + jitter);
+          ty = oy + (oy / radialLength) * (outward + jitter);
+          tz = oz + (oz / radialLength) * (outward + jitter);
+        }
       }
 
-      // Smooth interpolation (fast react, smooth return)
-      const lerp = isActive.current ? 0.15 : 0.04;
+      const lerp = pointer.current.active ? 0.22 : 0.06;
       arr[i] += (tx - arr[i]) * lerp;
       arr[i + 1] += (ty - arr[i + 1]) * lerp;
       arr[i + 2] += (tz - arr[i + 2]) * lerp;
     }
-    posAttr.needsUpdate = true;
 
-    // Rotation + breathing
+    posAttr.needsUpdate = true;
     ref.current.rotation.y += 0.0015;
     ref.current.rotation.x += 0.0005;
-    const scale = 1 + Math.sin(t * 0.8) * 0.12;
-    ref.current.scale.setScalar(scale);
+    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
 
     if (matRef.current) {
       matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
