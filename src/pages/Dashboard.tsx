@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
@@ -52,47 +52,37 @@ interface PopupConfig {
   id: PopupId;
   label: string;
   icon: React.ReactNode;
-  position: string; // tailwind classes
+  // anchor as percentages [top%, left%]
+  anchor: [number, number];
 }
 
 const popups: PopupConfig[] = [
-  {
-    id: "ops",
-    label: "Today's Ops",
-    icon: <Sparkles className="h-3.5 w-3.5" />,
-    position: "top-[12%] left-[5%]",
-  },
-  {
-    id: "nonneg",
-    label: "Non-Negotiables",
-    icon: <Shield className="h-3.5 w-3.5" />,
-    position: "top-[12%] right-[5%]",
-  },
-  {
-    id: "goals",
-    label: "Goals",
-    icon: <Target className="h-3.5 w-3.5" />,
-    position: "bottom-[28%] left-[5%]",
-  },
-  {
-    id: "habits",
-    label: "Habits",
-    icon: <Activity className="h-3.5 w-3.5" />,
-    position: "bottom-[28%] right-[5%]",
-  },
-  {
-    id: "stats",
-    label: "Performance",
-    icon: <BarChart3 className="h-3.5 w-3.5" />,
-    position: "bottom-[8%] left-[50%] -translate-x-1/2",
-  },
-  {
-    id: "mode",
-    label: "Mode",
-    icon: <ChevronRight className="h-3.5 w-3.5" />,
-    position: "top-[50%] right-[3%] -translate-y-1/2",
-  },
+  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [12, 5] },
+  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [12, 68] },
+  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [65, 5] },
+  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [65, 70] },
+  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [85, 35] },
+  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [42, 78] },
 ];
+
+// Generate random drift keyframes for each popup
+function useFloatAnimation(count: number) {
+  return useMemo(() => {
+    return Array.from({ length: count }, () => {
+      const duration = 8 + Math.random() * 7; // 8-15s
+      const xAmplitude = 10 + Math.random() * 20; // 10-30px
+      const yAmplitude = 8 + Math.random() * 16; // 8-24px
+      // random number of keyframe steps
+      const steps = 4 + Math.floor(Math.random() * 3);
+      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
+      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
+      // loop back to start
+      xKeys.push(xKeys[0]);
+      yKeys.push(yKeys[0]);
+      return { duration, xKeys, yKeys };
+    });
+  }, [count]);
+}
 
 const priorityDot: Record<string, string> = {
   high: "bg-primary",
@@ -103,6 +93,7 @@ const priorityDot: Record<string, string> = {
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
+  const floatAnims = useFloatAnimation(popups.length);
   const { config, mode } = useMode();
 
   const completed = tasks.filter((t) => t.done).length;
@@ -221,14 +212,32 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Floating popups */}
-      {popups.map((popup, i) => (
-        <motion.div
-          key={popup.id}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: i * 0.08 }}
-          className={`absolute z-20 ${popup.position}`}
-        >
+      {popups.map((popup, i) => {
+        const anim = floatAnims[i];
+        const isExpanded = expanded === popup.id;
+        return (
+          <motion.div
+            key={popup.id}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              x: isExpanded ? 0 : anim.xKeys,
+              y: isExpanded ? 0 : anim.yKeys,
+            }}
+            transition={{
+              opacity: { delay: i * 0.08, duration: 0.4 },
+              scale: { delay: i * 0.08, duration: 0.4 },
+              x: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
+              y: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
+            }}
+            style={{
+              position: "absolute",
+              top: `${popup.anchor[0]}%`,
+              left: `${popup.anchor[1]}%`,
+              zIndex: 20,
+            }}
+          >
           <AnimatePresence mode="wait">
             {expanded === popup.id ? (
               <motion.div
@@ -272,7 +281,8 @@ export default function Dashboard() {
             )}
           </AnimatePresence>
         </motion.div>
-      ))}
+        );
+      })}
     </div>
   );
 }
