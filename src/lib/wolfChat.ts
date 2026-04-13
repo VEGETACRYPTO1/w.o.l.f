@@ -2,6 +2,9 @@ export type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-chat`;
 
+// Simple session ID per browser tab
+const SESSION_ID = `wolf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
 export async function streamWolfChat({
   messages,
   mode,
@@ -22,12 +25,22 @@ export async function streamWolfChat({
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode }),
+      body: JSON.stringify({ messages, mode, sessionId: SESSION_ID }),
     });
 
     if (!resp.ok) {
       const data = await resp.json().catch(() => ({}));
       onError(data.error || `Error ${resp.status}`);
+      return;
+    }
+
+    // Check if response is JSON (action result) vs SSE stream
+    const contentType = resp.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await resp.json();
+      const text = data.reply || data.actions?.map((a: any) => a.result).join("\n") || "Done.";
+      onDelta(text);
+      onDone();
       return;
     }
 
