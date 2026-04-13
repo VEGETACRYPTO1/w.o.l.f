@@ -204,7 +204,7 @@ export default function Dashboard() {
         className="absolute top-4 left-1/2 -translate-x-1/2 z-20 text-center"
       >
         <h1 className="text-xl font-heading font-bold tracking-wide text-foreground/90">
-          SK10 JARVIS
+          SK10
         </h1>
         <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-0.5">
           Command Center • {config.label}
