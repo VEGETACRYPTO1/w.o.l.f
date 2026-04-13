@@ -110,6 +110,10 @@ export default function Chat() {
         setIsLoading(false);
         toast.error(err);
       },
+      onAction: (label) => {
+        setMessages((prev) => [...prev, { role: "assistant", content: label }]);
+        setIsLoading(false);
+      },
     });
   };
 
