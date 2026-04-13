@@ -35,14 +35,14 @@ function BloomEffect() {
   return null;
 }
 
-// ── 4000-particle sphere with breathing + opacity pulse + mouse distortion ──
+// ── 4000-particle sphere with breathing + opacity pulse + interaction distortion ──
 function ParticleSphere({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
   const originalPositions = useRef<Float32Array | null>(null);
-  const pointer = useRef({ x: 0, y: 0, active: false });
+  const interaction = useRef({ x: 0, y: 0, strength: 0 });
 
   const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -57,42 +57,29 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
-  const { size } = useThree();
-
   useEffect(() => {
-    const setPointer = (clientX: number, clientY: number) => {
-      pointer.current.x = (clientX / window.innerWidth) * 2 - 1;
-      pointer.current.y = -(clientY / window.innerHeight) * 2 + 1;
-      pointer.current.active = true;
+    const activate = (clientX: number, clientY: number) => {
+      interaction.current.x = (clientX / window.innerWidth) * 2 - 1;
+      interaction.current.y = 1 - (clientY / window.innerHeight) * 2;
+      interaction.current.strength = 1;
     };
 
-    const onMove = (event: PointerEvent) => setPointer(event.clientX, event.clientY);
-    const onTouchStart = (event: TouchEvent) => {
+    const onPointerMove = (event: PointerEvent) => activate(event.clientX, event.clientY);
+    const onTouch = (event: TouchEvent) => {
       const touch = event.touches[0];
-      if (touch) setPointer(touch.clientX, touch.clientY);
-    };
-    const onTouchMove = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (touch) setPointer(touch.clientX, touch.clientY);
-    };
-    const onEnd = () => {
-      pointer.current.active = false;
+      if (touch) activate(touch.clientX, touch.clientY);
     };
 
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerdown", onMove);
-    window.addEventListener("pointerup", onEnd);
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onEnd);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerdown", onPointerMove);
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    window.addEventListener("touchmove", onTouch, { passive: true });
 
     return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerdown", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerMove);
+      window.removeEventListener("touchstart", onTouch);
+      window.removeEventListener("touchmove", onTouch);
     };
   }, []);
 
@@ -100,39 +87,29 @@ function ParticleSphere({ color }: { color: string }) {
     const t = clock.getElapsedTime();
     if (!ref.current || !originalPositions.current) return;
 
+    interaction.current.strength *= 0.92;
+    const strength = interaction.current.strength;
+    const biasX = interaction.current.x * 0.22 * strength;
+    const biasY = interaction.current.y * 0.22 * strength;
+
     const posAttr = ref.current.geometry.attributes.position as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const orig = originalPositions.current;
-    const pointerWorldX = pointer.current.x * radius * (size.width / Math.max(size.height, 1));
-    const pointerWorldY = pointer.current.y * radius;
 
     for (let i = 0; i < count * 3; i += 3) {
       const ox = orig[i];
       const oy = orig[i + 1];
       const oz = orig[i + 2];
+      const radialLength = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
+      const wave = Math.sin(t * 8 + i * 0.017) * 0.14 * strength;
+      const burst = strength * (0.34 + 0.14 * Math.sin(i * 0.013 + t));
+      const shear = Math.cos(t * 5 + oz * 2.5 + i * 0.01) * 0.08 * strength;
 
-      let tx = ox;
-      let ty = oy;
-      let tz = oz;
+      const tx = ox + (ox / radialLength) * (burst + wave) + biasX * (1 + Math.abs(oy) * 0.35) + shear * (oy / radius);
+      const ty = oy + (oy / radialLength) * (burst + wave) + biasY * (1 + Math.abs(ox) * 0.35) - shear * (ox / radius);
+      const tz = oz + (oz / radialLength) * (burst * 0.9 + wave);
 
-      if (pointer.current.active) {
-        const dx = ox - pointerWorldX;
-        const dy = oy - pointerWorldY;
-        const planarDistance = Math.sqrt(dx * dx + dy * dy);
-        const influenceRadius = 1.15;
-
-        if (planarDistance < influenceRadius) {
-          const falloff = 1 - planarDistance / influenceRadius;
-          const radialLength = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
-          const outward = 0.55 * falloff;
-          const jitter = Math.sin(t * 6 + i * 0.015) * 0.03 * falloff;
-          tx = ox + (ox / radialLength) * (outward + jitter);
-          ty = oy + (oy / radialLength) * (outward + jitter);
-          tz = oz + (oz / radialLength) * (outward + jitter);
-        }
-      }
-
-      const lerp = pointer.current.active ? 0.22 : 0.06;
+      const lerp = strength > 0.03 ? 0.24 : 0.08;
       arr[i] += (tx - arr[i]) * lerp;
       arr[i + 1] += (ty - arr[i + 1]) * lerp;
       arr[i + 2] += (tz - arr[i + 2]) * lerp;
@@ -141,10 +118,10 @@ function ParticleSphere({ color }: { color: string }) {
     posAttr.needsUpdate = true;
     ref.current.rotation.y += 0.0015;
     ref.current.rotation.x += 0.0005;
-    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
+    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12 + strength * 0.06);
 
     if (matRef.current) {
-      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
+      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2 + strength * 0.08;
     }
   });
 

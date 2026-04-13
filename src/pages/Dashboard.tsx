@@ -60,6 +60,7 @@ interface FloatAnimationConfig {
   xKeys: number[];
   yKeys: number[];
   scaleKeys: number[];
+  rotateKeys: number[];
 }
 
 const popups: PopupConfig[] = [
@@ -74,11 +75,13 @@ const popups: PopupConfig[] = [
 function buildRandomWalkKeys(steps: number, maxStep: number, clamp: number) {
   const keys = [0];
   let current = 0;
+
   for (let i = 1; i < steps; i++) {
     current += (Math.random() - 0.5) * maxStep;
     current = Math.max(-clamp, Math.min(clamp, current));
     keys.push(current);
   }
+
   keys.push(keys[0]);
   return keys;
 }
@@ -86,18 +89,21 @@ function buildRandomWalkKeys(steps: number, maxStep: number, clamp: number) {
 function useFloatAnimation(count: number) {
   return useMemo<FloatAnimationConfig[]>(() => {
     return Array.from({ length: count }, () => {
-      const steps = 10 + Math.floor(Math.random() * 6);
+      const steps = 12 + Math.floor(Math.random() * 6);
+      const scaleKeys = Array.from({ length: steps }, () => 0.92 + Math.random() * 0.24);
+      scaleKeys.push(scaleKeys[0]);
+
       return {
-        duration: 26 + Math.random() * 18,
-        xKeys: buildRandomWalkKeys(steps, 22, 90),
-        yKeys: buildRandomWalkKeys(steps, 18, 70),
-        scaleKeys: Array.from({ length: steps + 1 }, () => 0.94 + Math.random() * 0.22),
+        duration: 28 + Math.random() * 20,
+        xKeys: buildRandomWalkKeys(steps, 36, 150),
+        yKeys: buildRandomWalkKeys(steps, 28, 120),
+        scaleKeys,
+        rotateKeys: buildRandomWalkKeys(steps, 12, 28),
       };
     });
   }, [count]);
 }
 
-// Particle burst component
 function ParticleBurst({ active }: { active: boolean }) {
   const particles = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -143,7 +149,7 @@ export default function Dashboard() {
   const [expanded, setExpanded] = useState<PopupId | null>(null);
   const [burstId, setBurstId] = useState<PopupId | null>(null);
   const floatAnims = useFloatAnimation(popups.length);
-  const { config, mode } = useMode();
+  const { config } = useMode();
 
   const completed = tasks.filter((t) => t.done).length;
 
@@ -252,7 +258,6 @@ export default function Dashboard() {
 
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {/* Greeting */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -263,25 +268,27 @@ export default function Dashboard() {
         </h1>
       </motion.div>
 
-      {/* Floating popups */}
       {popups.map((popup, i) => {
         const anim = floatAnims[i];
         const isExpanded = expanded === popup.id;
+
         return (
           <motion.div
             key={popup.id}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{
               opacity: 1,
-              scale: 1,
               x: isExpanded ? 0 : anim.xKeys,
               y: isExpanded ? 0 : anim.yKeys,
+              scale: isExpanded ? 1 : anim.scaleKeys,
+              rotate: isExpanded ? 0 : anim.rotateKeys,
             }}
             transition={{
               opacity: { delay: i * 0.08, duration: 0.4 },
-              scale: { delay: i * 0.08, duration: 0.4 },
               x: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
-              y: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
+              y: { duration: anim.duration * 0.9, repeat: Infinity, ease: "easeInOut" },
+              scale: { duration: anim.duration * 0.7, repeat: Infinity, ease: "easeInOut" },
+              rotate: { duration: anim.duration * 0.8, repeat: Infinity, ease: "easeInOut" },
             }}
             style={{
               position: "absolute",
@@ -290,46 +297,45 @@ export default function Dashboard() {
               zIndex: 20,
             }}
           >
-          <AnimatePresence mode="wait">
-            {expanded === popup.id ? (
-              <motion.div
-                key="expanded"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ duration: 0.2 }}
-                className="glass-card rounded-lg border border-border/50 p-4 min-w-[220px] max-w-[280px] cursor-pointer"
-                onClick={() => setExpanded(null)}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 text-primary">
-                    {popup.icon}
-                    <span className="text-xs font-heading font-semibold uppercase tracking-wider">{popup.label}</span>
+            <AnimatePresence mode="wait">
+              {isExpanded ? (
+                <motion.div
+                  key="expanded"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  className="glass-card rounded-lg border border-border/50 p-4 min-w-[220px] max-w-[280px] cursor-pointer"
+                  onClick={() => setExpanded(null)}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2 text-primary">
+                      {popup.icon}
+                      <span className="text-xs font-heading font-semibold uppercase tracking-wider">{popup.label}</span>
+                    </div>
+                    <X className="h-3 w-3 text-muted-foreground" />
                   </div>
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </div>
-                {renderExpanded(popup.id)}
-              </motion.div>
-            ) : (
-              <motion.button
-                key="collapsed"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => handleExpand(popup.id)}
-                className="relative h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary transition-colors group glass-card"
-              >
-                {/* Golden glow pulse ring */}
-                <span className="absolute inset-0 rounded-full animate-icon-glow-pulse" />
-                <span className="absolute inset-[-3px] rounded-full animate-icon-glow-pulse-outer" />
-                <span className="relative z-10 group-hover:animate-pulse-glow">{popup.icon}</span>
-                <ParticleBurst active={burstId === popup.id} />
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </motion.div>
+                  {renderExpanded(popup.id)}
+                </motion.div>
+              ) : (
+                <motion.button
+                  key="collapsed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => handleExpand(popup.id)}
+                  className="relative h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary transition-colors group glass-card"
+                >
+                  <span className="absolute inset-0 rounded-full animate-icon-glow-pulse" />
+                  <span className="absolute inset-[-3px] rounded-full animate-icon-glow-pulse-outer" />
+                  <span className="relative z-10 group-hover:animate-pulse-glow">{popup.icon}</span>
+                  <ParticleBurst active={burstId === popup.id} />
+                </motion.button>
+              )}
+            </AnimatePresence>
+          </motion.div>
         );
       })}
     </div>
