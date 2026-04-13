@@ -187,7 +187,8 @@ interface BoltData {
 
 let boltIdCounter = 0;
 
-function ElectricBolts({ color }: { color: string }) {
+function ElectricBolts() {
+  const boltColor = "#FFD60A";
   const [bolts, setBolts] = useState<BoltData[]>([]);
   const nextSpawn = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
