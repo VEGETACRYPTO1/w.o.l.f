@@ -37,19 +37,19 @@ function createStrike(): Strike {
 
 function StrikeLine({ strike }: { strike: Strike }) {
   const ref = useRef<THREE.Line>(null);
-
-  const geometry = new THREE.BufferGeometry().setFromPoints(strike.points);
+  const geometry = useRef(new THREE.BufferGeometry().setFromPoints(strike.points)).current;
 
   return (
-    <line ref={ref as any} geometry={geometry}>
-      <lineBasicMaterial
-        color="#FFD60A"
-        transparent
-        opacity={Math.min(strike.life * 1.5, 1)}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-      />
-    </line>
+    <primitive object={new THREE.Line(
+      geometry,
+      new THREE.LineBasicMaterial({
+        color: 0xFFD60A,
+        transparent: true,
+        opacity: Math.min(strike.life * 1.5, 1),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    )} />
   );
 }
 

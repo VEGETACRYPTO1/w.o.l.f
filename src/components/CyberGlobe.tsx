@@ -7,6 +7,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { useEffect } from "react";
+import { LightningStrikes } from "./LightningStrikes";
 
 const modeColors: Record<string, string> = {
   war: "#FF3B3B",
