@@ -39,37 +39,40 @@ function BloomEffect() {
 function HitSphere({ onHit }: { onHit: (hovering: boolean, point: THREE.Vector3 | null) => void }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const mouse = useRef(new THREE.Vector2(0, 0));
-  const { camera } = useThree();
+  const mouse = useRef(new THREE.Vector2());
+  const { camera, gl } = useThree();
 
   useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
-      mouse.current.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    const updatePointer = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     };
+
+    const onMove = (e: MouseEvent) => updatePointer(e.clientX, e.clientY);
     const onTouch = (e: TouchEvent) => {
       const t = e.touches[0];
-      if (t) {
-        mouse.current.x = (t.clientX / window.innerWidth) * 2 - 1;
-        mouse.current.y = -(t.clientY / window.innerHeight) * 2 + 1;
-      }
+      if (t) updatePointer(t.clientX, t.clientY);
     };
-    window.addEventListener("pointermove", onMove);
+
+    window.addEventListener("mousemove", onMove);
     window.addEventListener("touchmove", onTouch, { passive: true });
     window.addEventListener("touchstart", onTouch, { passive: true });
+
     return () => {
-      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("mousemove", onMove);
       window.removeEventListener("touchmove", onTouch);
       window.removeEventListener("touchstart", onTouch);
     };
-  }, []);
+  }, [gl]);
 
   useFrame(() => {
     if (!meshRef.current) return;
     raycaster.setFromCamera(mouse.current, camera);
-    const intersects = raycaster.intersectObject(meshRef.current);
+    const intersects = raycaster.intersectObject(meshRef.current, false);
+
     if (intersects.length > 0) {
-      onHit(true, intersects[0].point);
+      onHit(true, intersects[0].point.clone());
     } else {
       onHit(false, null);
     }
@@ -83,13 +86,14 @@ function HitSphere({ onHit }: { onHit: (hovering: boolean, point: THREE.Vector3 
   );
 }
 
-// ── 4000-particle sphere with breathing + raycast distortion ──
+// ── 4000-particle sphere with liquid raycast distortion ──
 function ParticleSphere({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
   const originalPositions = useRef<Float32Array | null>(null);
+  const velocities = useRef<Float32Array | null>(null);
   const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
 
   const positions = useMemo(() => {
@@ -102,6 +106,7 @@ function ParticleSphere({ color }: { color: string }) {
       pos[i * 3 + 2] = radius * Math.cos(phi);
     }
     originalPositions.current = pos.slice();
+    velocities.current = new Float32Array(pos.length).fill(0);
     return pos;
   }, []);
 
@@ -112,45 +117,54 @@ function ParticleSphere({ color }: { color: string }) {
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    if (!ref.current || !originalPositions.current) return;
+    if (!ref.current || !originalPositions.current || !velocities.current) return;
 
-    const posAttr = ref.current.geometry.attributes.position as THREE.BufferAttribute;
-    const arr = posAttr.array as Float32Array;
-    const orig = originalPositions.current;
+    const geometry = ref.current.geometry;
+    const positionsArray = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+    const original = originalPositions.current;
+    const velocity = velocities.current;
     const { hovering, point } = hitState.current;
 
-    for (let i = 0; i < count * 3; i += 3) {
-      const ox = orig[i];
-      const oy = orig[i + 1];
-      const oz = orig[i + 2];
+    for (let i = 0; i < positionsArray.length; i += 3) {
+      const ox = original[i];
+      const oy = original[i + 1];
+      const oz = original[i + 2];
+
+      const px = positionsArray[i];
+      const py = positionsArray[i + 1];
+      const pz = positionsArray[i + 2];
 
       if (hovering && point) {
-        const dx = ox - point.x;
-        const dy = oy - point.y;
-        const dz = oz - point.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const dx = px - point.x;
+        const dy = py - point.y;
+        const dz = pz - point.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
+        const interactionRadius = 0.9;
+        const strength = 0.6;
 
-        const influenceRadius = 0.7;
-        const strength = 0.35;
-
-        if (dist < influenceRadius) {
-          const falloff = 1 - (dist / influenceRadius);
-          arr[i] = ox + (dx / dist) * falloff * strength;
-          arr[i + 1] = oy + (dy / dist) * falloff * strength;
-          arr[i + 2] = oz + (dz / dist) * falloff * strength;
-        } else {
-          arr[i] += (ox - arr[i]) * 0.08;
-          arr[i + 1] += (oy - arr[i + 1]) * 0.08;
-          arr[i + 2] += (oz - arr[i + 2]) * 0.08;
+        if (dist < interactionRadius) {
+          const falloff = 1 - dist / interactionRadius;
+          const force = falloff * strength;
+          velocity[i] += (dx / dist) * force;
+          velocity[i + 1] += (dy / dist) * force;
+          velocity[i + 2] += (dz / dist) * force;
         }
-      } else {
-        arr[i] += (ox - arr[i]) * 0.08;
-        arr[i + 1] += (oy - arr[i + 1]) * 0.08;
-        arr[i + 2] += (oz - arr[i + 2]) * 0.08;
       }
+
+      velocity[i] += (ox - px) * 0.08;
+      velocity[i + 1] += (oy - py) * 0.08;
+      velocity[i + 2] += (oz - pz) * 0.08;
+
+      velocity[i] *= 0.85;
+      velocity[i + 1] *= 0.85;
+      velocity[i + 2] *= 0.85;
+
+      positionsArray[i] += velocity[i];
+      positionsArray[i + 1] += velocity[i + 1];
+      positionsArray[i + 2] += velocity[i + 2];
     }
 
-    posAttr.needsUpdate = true;
+    geometry.attributes.position.needsUpdate = true;
     ref.current.rotation.y += 0.0015;
     ref.current.rotation.x += 0.0005;
     ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
