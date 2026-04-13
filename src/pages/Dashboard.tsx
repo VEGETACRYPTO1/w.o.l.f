@@ -281,7 +281,8 @@ export default function Dashboard() {
             )}
           </AnimatePresence>
         </motion.div>
-      ))}
+        );
+      })}
     </div>
   );
 }
