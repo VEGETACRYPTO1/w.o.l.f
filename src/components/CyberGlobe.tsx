@@ -35,14 +35,62 @@ function BloomEffect() {
   return null;
 }
 
-// ── 4000-particle sphere with breathing + opacity pulse + interaction distortion ──
+// ── Invisible hit sphere for raycasting ──
+function HitSphere({ onHit }: { onHit: (hovering: boolean, point: THREE.Vector3 | null) => void }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const mouse = useRef(new THREE.Vector2(0, 0));
+  const { camera } = useThree();
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.current.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    };
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (t) {
+        mouse.current.x = (t.clientX / window.innerWidth) * 2 - 1;
+        mouse.current.y = -(t.clientY / window.innerHeight) * 2 + 1;
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("touchmove", onTouch);
+      window.removeEventListener("touchstart", onTouch);
+    };
+  }, []);
+
+  useFrame(() => {
+    if (!meshRef.current) return;
+    raycaster.setFromCamera(mouse.current, camera);
+    const intersects = raycaster.intersectObject(meshRef.current);
+    if (intersects.length > 0) {
+      onHit(true, intersects[0].point);
+    } else {
+      onHit(false, null);
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} visible={false}>
+      <sphereGeometry args={[2, 32, 32]} />
+      <meshBasicMaterial visible={false} />
+    </mesh>
+  );
+}
+
+// ── 4000-particle sphere with breathing + raycast distortion ──
 function ParticleSphere({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
   const originalPositions = useRef<Float32Array | null>(null);
-  const interaction = useRef({ x: 0, y: 0, strength: 0 });
+  const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
 
   const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -57,95 +105,86 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
-  useEffect(() => {
-    const activate = (clientX: number, clientY: number) => {
-      interaction.current.x = (clientX / window.innerWidth) * 2 - 1;
-      interaction.current.y = 1 - (clientY / window.innerHeight) * 2;
-      interaction.current.strength = 1;
-    };
-
-    const onPointerMove = (event: PointerEvent) => activate(event.clientX, event.clientY);
-    const onTouch = (event: TouchEvent) => {
-      const touch = event.touches[0];
-      if (touch) activate(touch.clientX, touch.clientY);
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerdown", onPointerMove);
-    window.addEventListener("touchstart", onTouch, { passive: true });
-    window.addEventListener("touchmove", onTouch, { passive: true });
-
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerdown", onPointerMove);
-      window.removeEventListener("touchstart", onTouch);
-      window.removeEventListener("touchmove", onTouch);
-    };
+  const handleHit = useCallback((hovering: boolean, point: THREE.Vector3 | null) => {
+    hitState.current.hovering = hovering;
+    hitState.current.point = point;
   }, []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     if (!ref.current || !originalPositions.current) return;
 
-    interaction.current.strength *= 0.92;
-    const strength = interaction.current.strength;
-    const biasX = interaction.current.x * 0.22 * strength;
-    const biasY = interaction.current.y * 0.22 * strength;
-
     const posAttr = ref.current.geometry.attributes.position as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const orig = originalPositions.current;
+    const { hovering, point } = hitState.current;
 
     for (let i = 0; i < count * 3; i += 3) {
       const ox = orig[i];
       const oy = orig[i + 1];
       const oz = orig[i + 2];
-      const radialLength = Math.sqrt(ox * ox + oy * oy + oz * oz) || 1;
-      const wave = Math.sin(t * 8 + i * 0.017) * 0.14 * strength;
-      const burst = strength * (0.34 + 0.14 * Math.sin(i * 0.013 + t));
-      const shear = Math.cos(t * 5 + oz * 2.5 + i * 0.01) * 0.08 * strength;
 
-      const tx = ox + (ox / radialLength) * (burst + wave) + biasX * (1 + Math.abs(oy) * 0.35) + shear * (oy / radius);
-      const ty = oy + (oy / radialLength) * (burst + wave) + biasY * (1 + Math.abs(ox) * 0.35) - shear * (ox / radius);
-      const tz = oz + (oz / radialLength) * (burst * 0.9 + wave);
+      if (hovering && point) {
+        const dx = ox - point.x;
+        const dy = oy - point.y;
+        const dz = oz - point.z;
+        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        const influenceRadius = 0.6;
 
-      const lerp = strength > 0.03 ? 0.24 : 0.08;
-      arr[i] += (tx - arr[i]) * lerp;
-      arr[i + 1] += (ty - arr[i + 1]) * lerp;
-      arr[i + 2] += (tz - arr[i + 2]) * lerp;
+        if (dist < influenceRadius) {
+          const force = (1 - dist / influenceRadius) * 0.2;
+          const tx = ox + (dx / dist) * force;
+          const ty = oy + (dy / dist) * force;
+          const tz = oz + (dz / dist) * force;
+          arr[i] += (tx - arr[i]) * 0.15;
+          arr[i + 1] += (ty - arr[i + 1]) * 0.15;
+          arr[i + 2] += (tz - arr[i + 2]) * 0.15;
+        } else {
+          arr[i] += (ox - arr[i]) * 0.05;
+          arr[i + 1] += (oy - arr[i + 1]) * 0.05;
+          arr[i + 2] += (oz - arr[i + 2]) * 0.05;
+        }
+      } else {
+        arr[i] += (ox - arr[i]) * 0.05;
+        arr[i + 1] += (oy - arr[i + 1]) * 0.05;
+        arr[i + 2] += (oz - arr[i + 2]) * 0.05;
+      }
     }
 
     posAttr.needsUpdate = true;
     ref.current.rotation.y += 0.0015;
     ref.current.rotation.x += 0.0005;
-    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12 + strength * 0.06);
+    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
 
     if (matRef.current) {
-      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2 + strength * 0.08;
+      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
     }
   });
 
   return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={count}
-          array={positions}
-          itemSize={3}
+    <>
+      <HitSphere onHit={handleHit} />
+      <points ref={ref}>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={count}
+            array={positions}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <pointsMaterial
+          ref={matRef}
+          color={color}
+          size={0.015}
+          transparent
+          opacity={0.9}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          sizeAttenuation
         />
-      </bufferGeometry>
-      <pointsMaterial
-        ref={matRef}
-        color={color}
-        size={0.015}
-        transparent
-        opacity={0.9}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-        sizeAttenuation
-      />
-    </points>
+      </points>
+    </>
   );
 }
 
