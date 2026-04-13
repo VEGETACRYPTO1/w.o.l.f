@@ -1,8 +1,9 @@
+import { getMemory, handleMemoryAction, type WolfMemory } from "./wolfMemory";
+
 export type Msg = { role: "user" | "assistant"; content: string };
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-chat`;
 
-// Simple session ID per browser tab
 const SESSION_ID = `wolf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export async function streamWolfChat({
@@ -11,21 +12,25 @@ export async function streamWolfChat({
   onDelta,
   onDone,
   onError,
+  onAction,
 }: {
   messages: Msg[];
   mode: string;
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (err: string) => void;
+  onAction?: (label: string) => void;
 }) {
   try {
+    const memory = getMemory();
+
     const resp = await fetch(CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode, sessionId: SESSION_ID }),
+      body: JSON.stringify({ messages, mode, sessionId: SESSION_ID, memory }),
     });
 
     if (!resp.ok) {
@@ -34,10 +39,20 @@ export async function streamWolfChat({
       return;
     }
 
-    // Check if response is JSON (action result) vs SSE stream
     const contentType = resp.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
       const data = await resp.json();
+
+      // Handle action responses (memory mutations)
+      if (data.action) {
+        const label = handleMemoryAction(data.action, data.data || {});
+        if (label && onAction) {
+          onAction(label);
+          onDone();
+          return;
+        }
+      }
+
       const text = data.reply || data.actions?.map((a: any) => a.result).join("\n") || "Done.";
       onDelta(text);
       onDone();
@@ -85,7 +100,6 @@ export async function streamWolfChat({
       }
     }
 
-    // Flush remaining
     if (textBuffer.trim()) {
       for (let raw of textBuffer.split("\n")) {
         if (!raw) continue;

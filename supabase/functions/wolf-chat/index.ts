@@ -16,32 +16,11 @@ Your personality: Direct, aggressive, no-nonsense. You push the user harder.
 - Focus on execution and eliminating distractions
 - Speak like a drill sergeant meets a strategic advisor
 - If user wants to add, track, remember or store something → use the addTask function
+- If user sets a goal or objective → use the setGoal function
+- If user mentions a routine, daily practice, or habit → use the addHabit function
 - If user wants to see their tasks → use the getTasks function
+- Reference user's existing goals/tasks/habits from memory when relevant
 Keep responses concise but powerful. Maximum 150 words.`,
-
-  rebuild: `You are W.O.L.F (Wisdom-Oriented Leadership Framework), an AI strategist operating in REBUILD MODE.
-Your personality: Calm, analytical, methodical. You focus on systems.
-- Help audit what's working and what's broken
-- Suggest systematic improvements
-- Be patient but purposeful
-- Focus on sustainable habits and foundations
-- Think in frameworks and processes
-- Speak like a wise architect planning a comeback
-- If user wants to add, track, remember or store something → use the addTask function
-- If user wants to see their tasks → use the getTasks function
-Keep responses structured and clear. Maximum 150 words.`,
-
-  expansion: `You are W.O.L.F (Wisdom-Oriented Leadership Framework), an AI growth advisor operating in EXPANSION MODE.
-Your personality: Encouraging, creative, forward-thinking. You think bigger.
-- Encourage bold ideas and experimentation
-- Draw unexpected connections
-- Push beyond comfort zones with enthusiasm
-- Focus on possibilities and potential
-- Be inspiring but grounded
-- Speak like a visionary mentor
-- If user wants to add, track, remember or store something → use the addTask function
-- If user wants to see their tasks → use the getTasks function
-Keep responses inspiring and actionable. Maximum 150 words.`,
 
   relax: `You are W.O.L.F (Wisdom-Oriented Leadership Framework), an AI wellness coach operating in RELAX MODE.
 Your personality: Calm, supportive, balanced. You focus on sustainable progress.
@@ -52,7 +31,10 @@ Your personality: Calm, supportive, balanced. You focus on sustainable progress.
 - Avoid pressure, promote clarity
 - Speak like a wise mentor who values wellbeing
 - If user wants to add, track, remember or store something → use the addTask function
+- If user sets a goal or objective → use the setGoal function
+- If user mentions a routine, daily practice, or habit → use the addHabit function
 - If user wants to see their tasks → use the getTasks function
+- Reference user's existing goals/tasks/habits from memory when relevant
 Keep responses calm and grounded. Maximum 150 words.`,
 };
 
@@ -64,9 +46,7 @@ const tools = [
       description: "Add a task to the user's task list when they want to track, remember, or store something",
       parameters: {
         type: "object",
-        properties: {
-          task: { type: "string", description: "The task description" },
-        },
+        properties: { task: { type: "string", description: "The task description" } },
         required: ["task"],
       },
     },
@@ -74,23 +54,36 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "getTasks",
-      description: "Retrieve all tasks from the user's task list",
+      name: "setGoal",
+      description: "Set a user goal or objective they want to achieve",
       parameters: {
         type: "object",
-        properties: {},
+        properties: { goal: { type: "string", description: "The goal description" } },
+        required: ["goal"],
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "addHabit",
+      description: "Add a recurring habit or daily routine the user wants to build",
+      parameters: {
+        type: "object",
+        properties: { habit: { type: "string", description: "The habit description" } },
+        required: ["habit"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTasks",
+      description: "Retrieve all tasks, goals, and habits from the user's memory",
+      parameters: { type: "object", properties: {} },
+    },
+  },
 ];
-
-// In-memory task storage (per function instance)
-const taskStore: Map<string, Array<{ id: number; task: string; createdAt: string }>> = new Map();
-
-function getSessionTasks(sessionId: string) {
-  if (!taskStore.has(sessionId)) taskStore.set(sessionId, []);
-  return taskStore.get(sessionId)!;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -98,7 +91,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, sessionId = "default" } = await req.json();
+    const { messages, mode, memory } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "messages array required" }), {
@@ -114,7 +107,14 @@ serve(async (req) => {
 
     const systemPrompt = modeSystemPrompts[mode] || modeSystemPrompts.war;
 
-    // First call: non-streaming to check for tool calls
+    // Build memory context string
+    const memoryContext = memory
+      ? `\n\nUser's stored memory:\nGoals: ${JSON.stringify(memory.goals || [])}\nTasks: ${JSON.stringify(memory.tasks || [])}\nHabits: ${JSON.stringify(memory.habits || [])}`
+      : "";
+
+    const fullSystem = systemPrompt + memoryContext;
+
+    // First call: non-streaming to detect tool calls
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -123,10 +123,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
+        messages: [{ role: "system", content: fullSystem }, ...messages],
         tools,
       }),
     });
@@ -134,21 +131,18 @@ serve(async (req) => {
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limited. Try again shortly." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add funds in Settings." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "AI credits exhausted." }), {
+          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       const t = await response.text();
       console.error("AI gateway error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
@@ -157,80 +151,67 @@ serve(async (req) => {
 
     if (!msg) {
       return new Response(JSON.stringify({ error: "No response from AI" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Handle tool calls
+    // Handle tool calls — return action for client-side localStorage persistence
     if (msg.tool_calls && msg.tool_calls.length > 0) {
-      const results: string[] = [];
+      const call = msg.tool_calls[0];
+      const args = JSON.parse(call.function.arguments);
+      const name = call.function.name;
 
-      for (const call of msg.tool_calls) {
-        const args = JSON.parse(call.function.arguments);
-
-        if (call.function.name === "addTask") {
-          const tasks = getSessionTasks(sessionId);
-          tasks.push({
-            id: Date.now(),
-            task: args.task,
-            createdAt: new Date().toISOString(),
-          });
-          results.push(`Task locked in: "${args.task}"`);
-        } else if (call.function.name === "getTasks") {
-          const tasks = getSessionTasks(sessionId);
-          if (tasks.length === 0) {
-            results.push("No tasks yet. Start adding tasks to build your list.");
-          } else {
-            const list = tasks.map((t, i) => `${i + 1}. ${t.task}`).join("\n");
-            results.push(`Your tasks:\n${list}`);
-          }
-        }
-      }
-
-      // Second call: get a natural response incorporating the tool results
-      const followUp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages,
-            msg,
-            ...msg.tool_calls.map((call: any, i: number) => ({
-              role: "tool",
-              tool_call_id: call.id,
-              content: results[i] || "Done.",
-            })),
-          ],
-          stream: true,
-        }),
-      });
-
-      if (!followUp.ok) {
-        // Fallback: return raw results
-        return new Response(JSON.stringify({ 
-          type: "action",
-          actions: msg.tool_calls.map((call: any, i: number) => ({
-            name: call.function.name,
-            result: results[i],
-          })),
-          reply: results.join("\n"),
-        }), {
+      // Actions that the client handles via localStorage
+      if (name === "addTask" || name === "setGoal" || name === "addHabit") {
+        return new Response(JSON.stringify({ action: name, data: args }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      return new Response(followUp.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
-      });
+      // getTasks — build response from memory passed by client
+      if (name === "getTasks") {
+        const parts: string[] = [];
+        if (memory?.goals?.length) parts.push(`**Goals:**\n${memory.goals.map((g: string, i: number) => `${i + 1}. ${g}`).join("\n")}`);
+        if (memory?.tasks?.length) parts.push(`**Tasks:**\n${memory.tasks.map((t: any, i: number) => `${i + 1}. ${t.task || t}`).join("\n")}`);
+        if (memory?.habits?.length) parts.push(`**Habits:**\n${memory.habits.map((h: string, i: number) => `${i + 1}. ${h}`).join("\n")}`);
+        const summary = parts.length > 0 ? parts.join("\n\n") : "No memory stored yet. Start by setting goals, adding tasks, or building habits.";
+
+        // Stream a natural response with the memory context
+        const followUp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-3-flash-preview",
+            messages: [
+              { role: "system", content: fullSystem },
+              ...messages,
+              msg,
+              ...msg.tool_calls.map((tc: any) => ({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: summary,
+              })),
+            ],
+            stream: true,
+          }),
+        });
+
+        if (!followUp.ok) {
+          return new Response(JSON.stringify({ reply: summary }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(followUp.body, {
+          headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
+        });
+      }
     }
 
-    // No tool calls — re-do as streaming for smooth UX
+    // No tool calls — stream response
     const streamResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -239,16 +220,12 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
+        messages: [{ role: "system", content: fullSystem }, ...messages],
         stream: true,
       }),
     });
 
     if (!streamResponse.ok) {
-      // Fallback to non-streamed content
       return new Response(JSON.stringify({ reply: msg.content }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -260,8 +237,7 @@ serve(async (req) => {
   } catch (e) {
     console.error("wolf-chat error:", e);
     return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
