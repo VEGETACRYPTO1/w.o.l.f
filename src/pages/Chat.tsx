@@ -33,6 +33,7 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFirstMessage, setIsFirstMessage] = useState(true);
   const [awaitingModeSelection, setAwaitingModeSelection] = useState(false);
+  const [lastWasModePrompt, setLastWasModePrompt] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,17 +41,20 @@ export default function Chat() {
   }, [messages]);
 
   const handleReset = () => {
-    setMessages([]);
-    setIsFirstMessage(true);
-    setAwaitingModeSelection(false);
+    // Don't clear chat — just re-prompt mode selection
+    if (lastWasModePrompt) return; // prevent duplicate prompts
+    setAwaitingModeSelection(true);
+    setIsFirstMessage(false);
     setIsLoading(false);
-    setInput("");
+    setLastWasModePrompt(true);
+    setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
     resetSphere();
   };
 
   const selectMode = (selectedMode: "war" | "relax") => {
     setMode(selectedMode);
     setAwaitingModeSelection(false);
+    setLastWasModePrompt(false);
     const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
     setMessages((prev) => [...prev, { role: "assistant", content: label }]);
   };
@@ -65,6 +69,7 @@ export default function Chat() {
     if (isFirstMessage) {
       setIsFirstMessage(false);
       setAwaitingModeSelection(true);
+      setLastWasModePrompt(true);
       setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
       return;
     }
@@ -77,6 +82,7 @@ export default function Chat() {
       return;
     }
 
+    setLastWasModePrompt(false);
     setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
