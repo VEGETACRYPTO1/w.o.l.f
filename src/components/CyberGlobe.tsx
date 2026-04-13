@@ -120,48 +120,72 @@ function ParticleSphere({ color }: { color: string }) {
     if (!ref.current || !originalPositions.current || !velocities.current) return;
 
     const geometry = ref.current.geometry;
-    const positionsArray = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
-    const original = originalPositions.current;
-    const velocity = velocities.current;
+    const pos = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+    const orig = originalPositions.current;
+    const vel = velocities.current;
     const { hovering, point } = hitState.current;
 
-    for (let i = 0; i < positionsArray.length; i += 3) {
-      const ox = original[i];
-      const oy = original[i + 1];
-      const oz = original[i + 2];
+    // Convert hit point to local space (accounts for rotation)
+    let localHit: THREE.Vector3 | null = null;
+    if (hovering && point) {
+      localHit = ref.current.worldToLocal(point.clone());
+    }
 
-      const px = positionsArray[i];
-      const py = positionsArray[i + 1];
-      const pz = positionsArray[i + 2];
+    const now = performance.now();
 
-      if (hovering && point) {
-        const dx = px - point.x;
-        const dy = py - point.y;
-        const dz = pz - point.z;
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
-        const interactionRadius = 0.9;
-        const strength = 0.6;
+    for (let i = 0; i < pos.length; i += 3) {
+      const ox = orig[i];
+      const oy = orig[i + 1];
+      const oz = orig[i + 2];
 
-        if (dist < interactionRadius) {
-          const falloff = 1 - dist / interactionRadius;
-          const force = falloff * strength;
-          velocity[i] += (dx / dist) * force;
-          velocity[i + 1] += (dy / dist) * force;
-          velocity[i + 2] += (dz / dist) * force;
+      const px = pos[i];
+      const py = pos[i + 1];
+      const pz = pos[i + 2];
+
+      if (hovering && localHit) {
+        // Front-side only: skip particles facing away
+        const dot = ox * localHit.x + oy * localHit.y + oz * localHit.z;
+        if (dot > 0) {
+          const dx = px - localHit.x;
+          const dy = py - localHit.y;
+          const dz = pz - localHit.z;
+          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
+
+          const interactionRadius = 0.7;
+          const strength = 0.55;
+
+          if (dist < interactionRadius) {
+            const falloff = 1 - dist / interactionRadius;
+
+            // Liquid push
+            const force = falloff * strength;
+            vel[i] += (dx / dist) * force;
+            vel[i + 1] += (dy / dist) * force;
+            vel[i + 2] += (dz / dist) * force;
+
+            // Ripple
+            const ripple = Math.sin(dist * 15 - now * 0.01) * 0.02 * falloff;
+            vel[i] += (dx / dist) * ripple;
+            vel[i + 1] += (dy / dist) * ripple;
+            vel[i + 2] += (dz / dist) * ripple;
+          }
         }
       }
 
-      velocity[i] += (ox - px) * 0.08;
-      velocity[i + 1] += (oy - py) * 0.08;
-      velocity[i + 2] += (oz - pz) * 0.08;
+      // Spring back
+      vel[i] += (ox - px) * 0.08;
+      vel[i + 1] += (oy - py) * 0.08;
+      vel[i + 2] += (oz - pz) * 0.08;
 
-      velocity[i] *= 0.85;
-      velocity[i + 1] *= 0.85;
-      velocity[i + 2] *= 0.85;
+      // Damping
+      vel[i] *= 0.82;
+      vel[i + 1] *= 0.82;
+      vel[i + 2] *= 0.82;
 
-      positionsArray[i] += velocity[i];
-      positionsArray[i + 1] += velocity[i + 1];
-      positionsArray[i + 2] += velocity[i + 2];
+      // Apply
+      pos[i] += vel[i];
+      pos[i + 1] += vel[i + 1];
+      pos[i + 2] += vel[i + 2];
     }
 
     geometry.attributes.position.needsUpdate = true;
