@@ -5,9 +5,9 @@ import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
 
 const modeColors: Record<string, string> = {
-  war: "#e04040",
-  rebuild: "#4090e0",
-  expansion: "#40b870",
+  war: "#FFD700",
+  rebuild: "#FFD700",
+  expansion: "#FFD700",
 };
 
 function GlobeWireframe({ color }: { color: string }) {

@@ -57,26 +57,24 @@ interface PopupConfig {
 }
 
 const popups: PopupConfig[] = [
-  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [12, 5] },
-  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [12, 68] },
-  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [65, 5] },
-  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [65, 70] },
-  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [85, 35] },
-  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [42, 78] },
+  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [15, 10] },
+  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [20, 60] },
+  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [55, 8] },
+  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [60, 65] },
+  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [80, 40] },
+  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
-// Generate random drift keyframes for each popup
+// Molecule-like free roaming animation — large wandering paths across the screen
 function useFloatAnimation(count: number) {
   return useMemo(() => {
     return Array.from({ length: count }, () => {
-      const duration = 8 + Math.random() * 7; // 8-15s
-      const xAmplitude = 10 + Math.random() * 20; // 10-30px
-      const yAmplitude = 8 + Math.random() * 16; // 8-24px
-      // random number of keyframe steps
-      const steps = 4 + Math.floor(Math.random() * 3);
-      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
-      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
-      // loop back to start
+      const duration = 12 + Math.random() * 10; // 12-22s full loop
+      const steps = 6 + Math.floor(Math.random() * 4); // 6-9 waypoints
+      // Large amplitude — wander across big portions of the screen
+      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 200);
+      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 160);
+      // Loop back
       xKeys.push(xKeys[0]);
       yKeys.push(yKeys[0]);
       return { duration, xKeys, yKeys };
