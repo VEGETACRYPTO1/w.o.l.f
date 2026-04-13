@@ -1,12 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Send, X, Bot, User } from "lucide-react";
+import { MessageSquare, Send, X, Bot, User, Loader2 } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { streamWolfChat, type Msg } from "@/lib/wolfChat";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 const modeGreetings: Record<string, string> = {
   war: "W.O.L.F active. State your objective.",
@@ -14,19 +12,14 @@ const modeGreetings: Record<string, string> = {
   expansion: "W.O.L.F active. Let's explore new possibilities.",
 };
 
-const modeResponses: Record<string, string> = {
-  war: "Understood. Here's the action plan:\n\n1. **Identify the #1 priority** — What moves the needle most?\n2. **Block 2 hours** of uninterrupted deep work\n3. **Eliminate** all non-essential tasks\n\nNo excuses. Execute now.",
-  rebuild: "Let's break this down methodically:\n\n1. **Audit** — What's working, what's not?\n2. **Simplify** — Remove complexity\n3. **Rebuild systems** one at a time\n\nPatience is a weapon. Use it.",
-  expansion: "Interesting direction. Here's how to explore it:\n\n1. **Brainstorm freely** — No bad ideas in this phase\n2. **Prototype fast** — Test one concept today\n3. **Seek unexpected connections**\n\nGrowth lives outside comfort zones.",
-};
-
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
   const { mode } = useMode();
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", content: modeGreetings[mode] },
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,19 +30,40 @@ export function ChatOverlay() {
     setMessages([{ role: "assistant", content: modeGreetings[mode] }]);
   }, [mode]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    const userMsg: Message = { role: "user", content: input.trim() };
-    setMessages((prev) => [...prev, userMsg]);
+  const send = async () => {
+    if (!input.trim() || isLoading) return;
+    const userMsg: Msg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
-    setTimeout(() => {
-      setMessages((prev) => [...prev, { role: "assistant", content: modeResponses[mode] }]);
-    }, 800);
+    setIsLoading(true);
+
+    let assistantSoFar = "";
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && prev.length > newMessages.length) {
+          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+        }
+        return [...prev.slice(0, newMessages.length), { role: "assistant", content: assistantSoFar }];
+      });
+    };
+
+    await streamWolfChat({
+      messages: newMessages.filter((m) => m.content !== modeGreetings[mode]),
+      mode,
+      onDelta: upsertAssistant,
+      onDone: () => setIsLoading(false),
+      onError: (err) => {
+        setIsLoading(false);
+        toast.error(err);
+      },
+    });
   };
 
   return (
     <>
-      {/* Floating Chat Button */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
@@ -60,14 +74,9 @@ export function ChatOverlay() {
           backdropFilter: "blur(10px)",
         }}
       >
-        {open ? (
-          <X className="h-6 w-6 text-primary" />
-        ) : (
-          <MessageSquare className="h-6 w-6 text-primary" />
-        )}
+        {open ? <X className="h-6 w-6 text-primary" /> : <MessageSquare className="h-6 w-6 text-primary" />}
       </button>
 
-      {/* Chat Overlay */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -76,11 +85,7 @@ export function ChatOverlay() {
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ duration: 0.2 }}
             className="fixed bottom-24 z-50"
-            style={{
-              left: "50%",
-              transform: "translateX(-50%)",
-              width: "min(500px, calc(100vw - 40px))",
-            }}
+            style={{ left: "50%", transform: "translateX(-50%)", width: "min(500px, calc(100vw - 40px))" }}
           >
             <div
               className="rounded-xl overflow-hidden flex flex-col"
@@ -91,37 +96,27 @@ export function ChatOverlay() {
                 maxHeight: "60vh",
               }}
             >
-              {/* Header */}
-              <div
-                className="px-4 py-3 flex items-center gap-2 border-b"
-                style={{ borderColor: "hsl(var(--primary) / 0.2)" }}
-              >
+              <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
                 <Bot className="h-4 w-4 text-primary" />
-                <span className="text-sm font-bold tracking-wider text-foreground">
-                  W.O.L.F
-                </span>
+                <span className="text-sm font-bold tracking-wider text-foreground">W.O.L.F</span>
               </div>
 
-              {/* Messages */}
               <div className="flex-1 overflow-auto p-4 space-y-3" style={{ maxHeight: "40vh" }}>
                 {messages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}
-                  >
+                  <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
                     {msg.role === "assistant" && (
                       <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
                         <Bot className="h-3 w-3 text-primary" />
                       </div>
                     )}
                     <div
-                      className={`max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed whitespace-pre-wrap ${
+                      className={`max-w-[85%] px-3 py-2 rounded-lg text-xs leading-relaxed ${
                         msg.role === "user"
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-white/5 border border-white/10 text-foreground"
+                          ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                          : "bg-white/5 border border-white/10 text-foreground prose prose-xs prose-invert max-w-none"
                       }`}
                     >
-                      {msg.content}
+                      {msg.role === "assistant" ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content}
                     </div>
                     {msg.role === "user" && (
                       <div className="h-6 w-6 rounded-md bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -130,27 +125,32 @@ export function ChatOverlay() {
                     )}
                   </div>
                 ))}
+                {isLoading && messages[messages.length - 1]?.role === "user" && (
+                  <div className="flex gap-2">
+                    <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
+                      <Loader2 className="h-3 w-3 text-primary animate-spin" />
+                    </div>
+                    <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-muted-foreground">
+                      Thinking...
+                    </div>
+                  </div>
+                )}
                 <div ref={endRef} />
               </div>
 
-              {/* Input */}
               <div className="p-3 border-t" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    send();
-                  }}
-                  className="flex items-center gap-2"
-                >
+                <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-2">
                   <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Command W.O.L.F..."
-                    className="flex-1 bg-transparent border-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                    disabled={isLoading}
+                    className="flex-1 bg-transparent border-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
                   />
                   <button
                     type="submit"
-                    className="h-8 w-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
+                    disabled={isLoading}
+                    className="h-8 w-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
                   >
                     <Send className="h-3.5 w-3.5" />
                   </button>
