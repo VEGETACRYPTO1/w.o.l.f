@@ -30,7 +30,7 @@ export function AppSidebar() {
   const { mode, setMode, config } = useMode();
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-border">
+    <Sidebar collapsible="icon" className="border-r border-border/50 backdrop-blur-md [&>div]:bg-sidebar/80">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="font-heading text-xs tracking-widest uppercase text-muted-foreground">
