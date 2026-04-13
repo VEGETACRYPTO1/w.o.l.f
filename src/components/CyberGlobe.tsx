@@ -228,7 +228,7 @@ function ElectricBolts() {
         <Line
           key={bolt.id}
           points={bolt.points}
-          color={color}
+          color={boltColor}
           lineWidth={1.5}
           transparent
           opacity={bolt.opacity * 0.8}
@@ -242,7 +242,7 @@ function Scene({ color }: { color: string }) {
   return (
     <>
       <GlobeWireframe color={color} />
-      <ElectricBolts color={color} />
+      <ElectricBolts />
       <ParticleField color={color} />
       <FloatingParticles color={color} />
       <OrbitalRing color={color} radius={2.8} speed={0.12} tilt={0.3} />
