@@ -212,14 +212,32 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Floating popups */}
-      {popups.map((popup, i) => (
-        <motion.div
-          key={popup.id}
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: i * 0.08 }}
-          className={`absolute z-20 ${popup.position}`}
-        >
+      {popups.map((popup, i) => {
+        const anim = floatAnims[i];
+        const isExpanded = expanded === popup.id;
+        return (
+          <motion.div
+            key={popup.id}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{
+              opacity: 1,
+              scale: 1,
+              x: isExpanded ? 0 : anim.xKeys,
+              y: isExpanded ? 0 : anim.yKeys,
+            }}
+            transition={{
+              opacity: { delay: i * 0.08, duration: 0.4 },
+              scale: { delay: i * 0.08, duration: 0.4 },
+              x: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
+              y: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
+            }}
+            style={{
+              position: "absolute",
+              top: `${popup.anchor[0]}%`,
+              left: `${popup.anchor[1]}%`,
+              zIndex: 20,
+            }}
+          >
           <AnimatePresence mode="wait">
             {expanded === popup.id ? (
               <motion.div
