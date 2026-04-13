@@ -51,7 +51,7 @@ export default function Goals() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-card rounded-lg border border-border overflow-hidden"
+            className="glass-card rounded-lg border border-border overflow-hidden"
           >
             <button
               onClick={() => setExpanded(expanded === goal.id ? null : goal.id)}

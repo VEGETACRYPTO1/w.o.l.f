@@ -58,7 +58,7 @@ export default function Habits() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="bg-card rounded-lg border border-border p-4"
+            className="glass-card rounded-lg border border-border p-4"
           >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">

@@ -45,7 +45,7 @@ export default function Analytics() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1 }}
-            className="bg-card rounded-lg border border-border p-4"
+            className="glass-card rounded-lg border border-border p-4"
           >
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-heading">{s.label}</p>
             <p className="text-2xl font-heading font-bold mt-1">{s.value}</p>
@@ -61,7 +61,7 @@ export default function Analytics() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.3 }}
-        className="bg-card rounded-lg border border-border p-5"
+        className="glass-card rounded-lg border border-border p-5"
       >
         <h2 className="font-heading font-semibold text-sm mb-4">Daily Productivity Score</h2>
         <div className="flex items-end gap-3 h-40">
@@ -89,7 +89,7 @@ export default function Analytics() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4 }}
-        className="bg-card rounded-lg border border-border p-5"
+        className="glass-card rounded-lg border border-border p-5"
       >
         <h2 className="font-heading font-semibold text-sm mb-4">JARVIS Insights</h2>
         <div className="space-y-3">
