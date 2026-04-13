@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
@@ -55,14 +55,6 @@ interface PopupConfig {
   anchor: [number, number];
 }
 
-interface FloatAnimationConfig {
-  duration: number;
-  xKeys: number[];
-  yKeys: number[];
-  scaleKeys: number[];
-  rotateKeys: number[];
-}
-
 const popups: PopupConfig[] = [
   { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [20, 15] },
   { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [15, 55] },
@@ -72,36 +64,72 @@ const popups: PopupConfig[] = [
   { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
-function buildRandomWalkKeys(steps: number, maxStep: number, clamp: number) {
-  const keys = [0];
-  let current = 0;
+// ── Velocity-based free-roaming icon positions ──
+function useIconPositions(count: number) {
+  const positions = useRef<{ x: number; y: number }[]>(
+    Array.from({ length: count }, () => ({ x: 0, y: 0 }))
+  );
+  const velocities = useRef<{ x: number; y: number }[]>(
+    Array.from({ length: count }, () => ({
+      x: (Math.random() - 0.5) * 1.5,
+      y: (Math.random() - 0.5) * 1.5,
+    }))
+  );
+  const [tick, setTick] = useState(0);
 
-  for (let i = 1; i < steps; i++) {
-    current += (Math.random() - 0.5) * maxStep;
-    current = Math.max(-clamp, Math.min(clamp, current));
-    keys.push(current);
-  }
+  useEffect(() => {
+    let frameId: number;
+    let lastTime = performance.now();
 
-  keys.push(keys[0]);
-  return keys;
-}
+    const step = (now: number) => {
+      const dt = Math.min((now - lastTime) / 16, 3); // normalize to ~60fps
+      lastTime = now;
 
-function useFloatAnimation(count: number) {
-  return useMemo<FloatAnimationConfig[]>(() => {
-    return Array.from({ length: count }, () => {
-      const steps = 12 + Math.floor(Math.random() * 6);
-      const scaleKeys = Array.from({ length: steps }, () => 0.92 + Math.random() * 0.24);
-      scaleKeys.push(scaleKeys[0]);
+      for (let i = 0; i < count; i++) {
+        const vel = velocities.current[i];
+        const pos = positions.current[i];
 
-      return {
-        duration: 28 + Math.random() * 20,
-        xKeys: buildRandomWalkKeys(steps, 36, 150),
-        yKeys: buildRandomWalkKeys(steps, 28, 120),
-        scaleKeys,
-        rotateKeys: buildRandomWalkKeys(steps, 12, 28),
-      };
-    });
+        // random acceleration (Brownian-like)
+        vel.x += (Math.random() - 0.5) * 0.12;
+        vel.y += (Math.random() - 0.5) * 0.12;
+
+        // subtle wave
+        vel.y += Math.sin(now * 0.001 + i * 1.7) * 0.015;
+
+        // damping
+        vel.x *= 0.985;
+        vel.y *= 0.985;
+
+        // clamp velocity
+        const maxSpeed = 1.8;
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+        if (speed > maxSpeed) {
+          vel.x = (vel.x / speed) * maxSpeed;
+          vel.y = (vel.y / speed) * maxSpeed;
+        }
+
+        pos.x += vel.x * dt;
+        pos.y += vel.y * dt;
+
+        // boundary pull-back (soft)
+        const maxDrift = 120;
+        if (Math.abs(pos.x) > maxDrift) {
+          vel.x -= Math.sign(pos.x) * 0.15;
+        }
+        if (Math.abs(pos.y) > maxDrift) {
+          vel.y -= Math.sign(pos.y) * 0.15;
+        }
+      }
+
+      setTick(t => t + 1);
+      frameId = requestAnimationFrame(step);
+    };
+
+    frameId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frameId);
   }, [count]);
+
+  return positions.current;
 }
 
 function ParticleBurst({ active }: { active: boolean }) {
@@ -148,7 +176,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
   const [burstId, setBurstId] = useState<PopupId | null>(null);
-  const floatAnims = useFloatAnimation(popups.length);
+  const iconPositions = useIconPositions(popups.length);
   const { config } = useMode();
 
   const completed = tasks.filter((t) => t.done).length;
@@ -269,31 +297,18 @@ export default function Dashboard() {
       </motion.div>
 
       {popups.map((popup, i) => {
-        const anim = floatAnims[i];
+        const pos = iconPositions[i];
         const isExpanded = expanded === popup.id;
 
         return (
-          <motion.div
+          <div
             key={popup.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{
-              opacity: 1,
-              x: isExpanded ? 0 : anim.xKeys,
-              y: isExpanded ? 0 : anim.yKeys,
-              scale: isExpanded ? 1 : anim.scaleKeys,
-              rotate: isExpanded ? 0 : anim.rotateKeys,
-            }}
-            transition={{
-              opacity: { delay: i * 0.08, duration: 0.4 },
-              x: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
-              y: { duration: anim.duration * 0.9, repeat: Infinity, ease: "easeInOut" },
-              scale: { duration: anim.duration * 0.7, repeat: Infinity, ease: "easeInOut" },
-              rotate: { duration: anim.duration * 0.8, repeat: Infinity, ease: "easeInOut" },
-            }}
             style={{
               position: "absolute",
               top: `${popup.anchor[0]}%`,
               left: `${popup.anchor[1]}%`,
+              transform: `translate(${isExpanded ? 0 : pos.x}px, ${isExpanded ? 0 : pos.y}px)`,
+              transition: isExpanded ? "transform 0.3s ease-out" : undefined,
               zIndex: 20,
             }}
           >
@@ -335,7 +350,7 @@ export default function Dashboard() {
                 </motion.button>
               )}
             </AnimatePresence>
-          </motion.div>
+          </div>
         );
       })}
     </div>
