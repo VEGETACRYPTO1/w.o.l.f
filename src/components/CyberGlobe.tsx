@@ -390,6 +390,7 @@ function Scene({ color }: { color: string }) {
       <ConnectionLines color={color} />
       <NeuronSignals color={color} />
       <BackgroundStars />
+      <LightningStrikes />
     </>
   );
 }
