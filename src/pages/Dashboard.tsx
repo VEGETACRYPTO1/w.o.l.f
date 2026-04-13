@@ -262,7 +262,8 @@ export default function Dashboard() {
                 whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setExpanded(popup.id)}
-                className="glass-card h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary hover:border-primary/30 transition-colors group"
+                className="glass-card h-10 w-10 rounded-full border border-yellow-500/40 flex items-center justify-center hover:border-yellow-400/60 transition-colors group"
+                style={{ color: '#FFD700', boxShadow: '0 0 12px rgba(255,215,0,0.2)' }}
               >
                 <span className="group-hover:animate-pulse-glow">{popup.icon}</span>
               </motion.button>
