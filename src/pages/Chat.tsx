@@ -1,12 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Bot, User } from "lucide-react";
+import { Send, Bot, User, Loader2 } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { streamWolfChat, type Msg } from "@/lib/wolfChat";
+import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 const modeGreetings: Record<string, string> = {
   war: "W.O.L.F active. State your objective.",
@@ -16,10 +14,11 @@ const modeGreetings: Record<string, string> = {
 
 export default function Chat() {
   const { mode, config } = useMode();
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Msg[]>([
     { role: "assistant", content: modeGreetings[mode] },
   ]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,21 +29,36 @@ export default function Chat() {
     setMessages([{ role: "assistant", content: modeGreetings[mode] }]);
   }, [mode]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    const userMsg: Message = { role: "user", content: input.trim() };
-    setMessages((prev) => [...prev, userMsg]);
+  const send = async () => {
+    if (!input.trim() || isLoading) return;
+    const userMsg: Msg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
+    setIsLoading(true);
 
-    // Mock AI response
-    setTimeout(() => {
-      const responses: Record<string, string> = {
-        war: "Understood. Here's the action plan:\n\n1. **Identify the #1 priority** — What moves the needle most?\n2. **Block 2 hours** of uninterrupted deep work\n3. **Eliminate** all non-essential tasks\n\nNo excuses. Execute now.",
-        rebuild: "Let's break this down methodically:\n\n1. **Audit** — What's working, what's not?\n2. **Simplify** — Remove complexity\n3. **Rebuild systems** one at a time\n\nPatience is a weapon. Use it.",
-        expansion: "Interesting direction. Here's how to explore it:\n\n1. **Brainstorm freely** — No bad ideas in this phase\n2. **Prototype fast** — Test one concept today\n3. **Seek unexpected connections**\n\nGrowth lives outside comfort zones.",
-      };
-      setMessages((prev) => [...prev, { role: "assistant", content: responses[mode] }]);
-    }, 800);
+    let assistantSoFar = "";
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && prev.length > newMessages.length) {
+          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+        }
+        return [...prev.slice(0, newMessages.length), { role: "assistant", content: assistantSoFar }];
+      });
+    };
+
+    await streamWolfChat({
+      messages: newMessages.filter((m) => m.content !== modeGreetings[mode]),
+      mode,
+      onDelta: upsertAssistant,
+      onDone: () => setIsLoading(false),
+      onError: (err) => {
+        setIsLoading(false);
+        toast.error(err);
+      },
+    });
   };
 
   return (
@@ -54,7 +68,6 @@ export default function Chat() {
         <p className="text-xs text-muted-foreground">{config.tone}</p>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-auto space-y-4 pb-4">
         {messages.map((msg, i) => (
           <motion.div
@@ -69,13 +82,17 @@ export default function Chat() {
               </div>
             )}
             <div
-              className={`max-w-[80%] px-4 py-3 rounded-lg text-sm leading-relaxed whitespace-pre-wrap ${
+              className={`max-w-[80%] px-4 py-3 rounded-lg text-sm leading-relaxed ${
                 msg.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card border border-border"
+                  ? "bg-primary text-primary-foreground whitespace-pre-wrap"
+                  : "bg-card border border-border prose prose-sm prose-invert max-w-none"
               }`}
             >
-              {msg.content}
+              {msg.role === "assistant" ? (
+                <ReactMarkdown>{msg.content}</ReactMarkdown>
+              ) : (
+                msg.content
+              )}
             </div>
             {msg.role === "user" && (
               <div className="h-7 w-7 rounded-md bg-secondary flex items-center justify-center shrink-0 mt-0.5">
@@ -84,10 +101,19 @@ export default function Chat() {
             )}
           </motion.div>
         ))}
+        {isLoading && messages[messages.length - 1]?.role === "user" && (
+          <div className="flex gap-3">
+            <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
+              <Loader2 className="h-4 w-4 text-primary animate-spin" />
+            </div>
+            <div className="px-4 py-3 rounded-lg bg-card border border-border text-sm text-muted-foreground">
+              Thinking...
+            </div>
+          </div>
+        )}
         <div ref={endRef} />
       </div>
 
-      {/* Input */}
       <div className="border-t border-border pt-4">
         <form
           onSubmit={(e) => {
@@ -100,11 +126,13 @@ export default function Chat() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Command W.O.L.F..."
-            className="flex-1 bg-secondary border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            disabled={isLoading}
+            className="flex-1 bg-secondary border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
           />
           <button
             type="submit"
-            className="h-10 w-10 rounded-md bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity"
+            disabled={isLoading}
+            className="h-10 w-10 rounded-md bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
           </button>
