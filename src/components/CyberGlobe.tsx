@@ -1,6 +1,6 @@
 import { useRef, useMemo, useState, useEffect, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Points, PointMaterial, Line, EffectComposer, Bloom } from "@react-three/drei";
+import { Points, PointMaterial, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
 
