@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-export type Mode = "war" | "rebuild" | "expansion";
+export type Mode = "war" | "rebuild" | "expansion" | "relax";
 
 interface ModeConfig {
   label: string;
@@ -27,6 +27,12 @@ export const MODE_CONFIGS: Record<Mode, ModeConfig> = {
     description: "Growth & creativity. Explore new territory.",
     icon: "🌱",
     tone: "Encouraging, creative, forward-thinking. Think bigger.",
+  },
+  relax: {
+    label: "Relax Mode",
+    description: "Balanced, calm, sustainable progress.",
+    icon: "🧘",
+    tone: "Calm, supportive, balanced. Sustainable pace.",
   },
 };
 
