@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Send, X, Bot, User, Loader2, Swords, Leaf } from "lucide-react";
+import { MessageSquare, Send, X, User, Loader2, Swords, Leaf } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { resetSphere } from "@/components/CyberGlobe";
 
 const MODE_SELECTION_MSG = "Choose your mode:";
 
@@ -21,6 +22,15 @@ export function ChatOverlay() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleReset = () => {
+    setMessages([]);
+    setIsFirstMessage(true);
+    setAwaitingModeSelection(false);
+    setIsLoading(false);
+    setInput("");
+    resetSphere();
+  };
 
   const selectMode = (selectedMode: "war" | "relax") => {
     setMode(selectedMode);
@@ -65,7 +75,12 @@ export function ChatOverlay() {
     };
 
     await streamWolfChat({
-      messages: newMessages.filter((m) => m.content !== MODE_SELECTION_MSG && !m.content.startsWith("⚔️ War Mode activated") && !m.content.startsWith("🧘 Relax Mode activated") && m.content !== 'Please reply with "War" or "Relax" to choose your mode.'),
+      messages: newMessages.filter((m) =>
+        m.content !== MODE_SELECTION_MSG &&
+        !m.content.startsWith("⚔️ War Mode activated") &&
+        !m.content.startsWith("🧘 Relax Mode activated") &&
+        m.content !== 'Please reply with "War" or "Relax" to choose your mode.'
+      ),
       mode,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
@@ -88,7 +103,7 @@ export function ChatOverlay() {
           backdropFilter: "blur(10px)",
         }}
       >
-        {open ? <X className="h-6 w-6 text-primary" /> : <MessageSquare className="h-6 w-6 text-primary" />}
+        {open ? <X className="h-6 w-6 text-primary" /> : <span className="text-2xl">🐺</span>}
       </button>
 
       <AnimatePresence>
@@ -111,7 +126,13 @@ export function ChatOverlay() {
               }}
             >
               <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
-                <Bot className="h-4 w-4 text-primary" />
+                <button
+                  onClick={handleReset}
+                  className="hover:scale-110 transition-transform"
+                  title="Reset W.O.L.F"
+                >
+                  <span className="text-base">🐺</span>
+                </button>
                 <span className="text-sm font-bold tracking-wider text-foreground">W.O.L.F</span>
               </div>
 
@@ -124,8 +145,9 @@ export function ChatOverlay() {
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
                     {msg.role === "assistant" && (
-                      <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                        <Bot className="h-3 w-3 text-primary" />
+                      <div className="h-6 w-6 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                        style={{ background: "rgba(255,255,255,0.05)" }}>
+                        <span className="text-xs leading-none">🐺</span>
                       </div>
                     )}
                     <div
@@ -145,7 +167,6 @@ export function ChatOverlay() {
                   </div>
                 ))}
 
-                {/* Mode selection buttons */}
                 {awaitingModeSelection && (
                   <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 pl-8">
                     <button
@@ -179,8 +200,9 @@ export function ChatOverlay() {
 
                 {isLoading && messages[messages.length - 1]?.role === "user" && (
                   <div className="flex gap-2">
-                    <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
-                      <Loader2 className="h-3 w-3 text-primary animate-spin" />
+                    <div className="h-6 w-6 rounded-full flex items-center justify-center shrink-0"
+                      style={{ background: "rgba(255,255,255,0.05)" }}>
+                      <span className="text-xs leading-none animate-pulse">🐺</span>
                     </div>
                     <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-xs text-muted-foreground">
                       Thinking...
