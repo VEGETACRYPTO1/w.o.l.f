@@ -9,9 +9,9 @@ interface Message {
 }
 
 const modeGreetings: Record<string, string> = {
-  war: "War Mode active. State your objective.",
-  rebuild: "Rebuild Mode active. Let's assess and plan strategically.",
-  expansion: "Expansion Mode active. Let's explore new possibilities.",
+  war: "W.O.L.F active. State your objective.",
+  rebuild: "W.O.L.F active. Let's assess and plan strategically.",
+  expansion: "W.O.L.F active. Let's explore new possibilities.",
 };
 
 export default function Chat() {
@@ -50,7 +50,7 @@ export default function Chat() {
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-7rem)]">
       <div className="mb-4">
-        <h1 className="text-2xl font-heading font-bold">JARVIS</h1>
+        <h1 className="text-2xl font-heading font-bold">W.O.L.F</h1>
         <p className="text-xs text-muted-foreground">{config.tone}</p>
       </div>
 
@@ -99,7 +99,7 @@ export default function Chat() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Command JARVIS..."
+            placeholder="Command W.O.L.F..."
             className="flex-1 bg-secondary border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
           <button
