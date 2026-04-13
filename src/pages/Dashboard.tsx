@@ -57,26 +57,24 @@ interface PopupConfig {
 }
 
 const popups: PopupConfig[] = [
-  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [12, 5] },
-  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [12, 68] },
-  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [65, 5] },
-  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [65, 70] },
-  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [85, 35] },
-  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [42, 78] },
+  { id: "ops", label: "Today's Ops", icon: <Sparkles className="h-3.5 w-3.5" />, anchor: [20, 15] },
+  { id: "nonneg", label: "Non-Negotiables", icon: <Shield className="h-3.5 w-3.5" />, anchor: [15, 55] },
+  { id: "goals", label: "Goals", icon: <Target className="h-3.5 w-3.5" />, anchor: [55, 10] },
+  { id: "habits", label: "Habits", icon: <Activity className="h-3.5 w-3.5" />, anchor: [60, 60] },
+  { id: "stats", label: "Performance", icon: <BarChart3 className="h-3.5 w-3.5" />, anchor: [80, 40] },
+  { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
 // Generate random drift keyframes for each popup
 function useFloatAnimation(count: number) {
   return useMemo(() => {
     return Array.from({ length: count }, () => {
-      const duration = 8 + Math.random() * 7; // 8-15s
-      const xAmplitude = 10 + Math.random() * 20; // 10-30px
-      const yAmplitude = 8 + Math.random() * 16; // 8-24px
-      // random number of keyframe steps
-      const steps = 4 + Math.floor(Math.random() * 3);
+      const duration = 20 + Math.random() * 15; // 20-35s for slower movement
+      const xAmplitude = 30 + Math.random() * 40; // 30-70% range
+      const yAmplitude = 20 + Math.random() * 30; // 20-50% range
+      const steps = 5 + Math.floor(Math.random() * 4);
       const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
       const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
-      // loop back to start
       xKeys.push(xKeys[0]);
       yKeys.push(yKeys[0]);
       return { duration, xKeys, yKeys };

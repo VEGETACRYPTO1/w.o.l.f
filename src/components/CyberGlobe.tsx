@@ -187,7 +187,8 @@ interface BoltData {
 
 let boltIdCounter = 0;
 
-function ElectricBolts({ color }: { color: string }) {
+function ElectricBolts() {
+  const boltColor = "#FFD60A";
   const [bolts, setBolts] = useState<BoltData[]>([]);
   const nextSpawn = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
@@ -227,7 +228,7 @@ function ElectricBolts({ color }: { color: string }) {
         <Line
           key={bolt.id}
           points={bolt.points}
-          color={color}
+          color={boltColor}
           lineWidth={1.5}
           transparent
           opacity={bolt.opacity * 0.8}
@@ -241,7 +242,7 @@ function Scene({ color }: { color: string }) {
   return (
     <>
       <GlobeWireframe color={color} />
-      <ElectricBolts color={color} />
+      <ElectricBolts />
       <ParticleField color={color} />
       <FloatingParticles color={color} />
       <OrbitalRing color={color} radius={2.8} speed={0.12} tilt={0.3} />
