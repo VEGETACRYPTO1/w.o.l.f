@@ -1,34 +1,33 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Send, X, Bot, User, Loader2 } from "lucide-react";
+import { MessageSquare, Send, X, Bot, User, Loader2, Swords, Leaf } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
-const modeGreetings: Record<string, string> = {
-  war: "W.O.L.F active. State your objective.",
-  rebuild: "W.O.L.F active. Let's assess and plan strategically.",
-  expansion: "W.O.L.F active. Let's explore new possibilities.",
-};
+const MODE_SELECTION_MSG = "Choose your mode:";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
-  const { mode } = useMode();
-  const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: modeGreetings[mode] },
-  ]);
+  const { mode, setMode } = useMode();
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFirstMessage, setIsFirstMessage] = useState(true);
+  const [awaitingModeSelection, setAwaitingModeSelection] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    setMessages([{ role: "assistant", content: modeGreetings[mode] }]);
-  }, [mode]);
+  const selectMode = (selectedMode: "war" | "relax") => {
+    setMode(selectedMode);
+    setAwaitingModeSelection(false);
+    const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
+    setMessages((prev) => [...prev, { role: "assistant", content: label }]);
+  };
 
   const send = async () => {
     if (!input.trim() || isLoading) return;
@@ -36,8 +35,23 @@ export function ChatOverlay() {
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
-    setIsLoading(true);
 
+    if (isFirstMessage) {
+      setIsFirstMessage(false);
+      setAwaitingModeSelection(true);
+      setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
+      return;
+    }
+
+    if (awaitingModeSelection) {
+      const lower = input.trim().toLowerCase();
+      if (lower.includes("war")) { selectMode("war"); return; }
+      if (lower.includes("relax")) { selectMode("relax"); return; }
+      setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "War" or "Relax" to choose your mode.' }]);
+      return;
+    }
+
+    setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
       assistantSoFar += chunk;
@@ -51,7 +65,7 @@ export function ChatOverlay() {
     };
 
     await streamWolfChat({
-      messages: newMessages.filter((m) => m.content !== modeGreetings[mode]),
+      messages: newMessages.filter((m) => m.content !== MODE_SELECTION_MSG && !m.content.startsWith("⚔️ War Mode activated") && !m.content.startsWith("🧘 Relax Mode activated") && m.content !== 'Please reply with "War" or "Relax" to choose your mode.'),
       mode,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
@@ -102,6 +116,11 @@ export function ChatOverlay() {
               </div>
 
               <div className="flex-1 overflow-auto p-4 space-y-3" style={{ maxHeight: "40vh" }}>
+                {messages.length === 0 && (
+                  <div className="text-center text-muted-foreground text-xs opacity-60 py-8">
+                    Send a message to begin.
+                  </div>
+                )}
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : ""}`}>
                     {msg.role === "assistant" && (
@@ -125,6 +144,39 @@ export function ChatOverlay() {
                     )}
                   </div>
                 ))}
+
+                {/* Mode selection buttons */}
+                {awaitingModeSelection && (
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 pl-8">
+                    <button
+                      onClick={() => selectMode("war")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
+                      style={{
+                        background: "rgba(220, 38, 38, 0.15)",
+                        borderColor: "rgba(220, 38, 38, 0.4)",
+                        color: "#ef4444",
+                        boxShadow: "0 0 15px rgba(220, 38, 38, 0.2)",
+                      }}
+                    >
+                      <Swords className="h-3 w-3" />
+                      War
+                    </button>
+                    <button
+                      onClick={() => selectMode("relax")}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
+                      style={{
+                        background: "rgba(34, 197, 94, 0.15)",
+                        borderColor: "rgba(34, 197, 94, 0.4)",
+                        color: "#22c55e",
+                        boxShadow: "0 0 15px rgba(34, 197, 94, 0.2)",
+                      }}
+                    >
+                      <Leaf className="h-3 w-3" />
+                      Relax
+                    </button>
+                  </motion.div>
+                )}
+
                 {isLoading && messages[messages.length - 1]?.role === "user" && (
                   <div className="flex gap-2">
                     <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
