@@ -16,7 +16,7 @@ import {
 
 const navItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "JARVIS Chat", url: "/chat", icon: MessageSquare },
+  { title: "W.O.L.F Chat", url: "/chat", icon: MessageSquare },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Habits", url: "/habits", icon: Activity },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
