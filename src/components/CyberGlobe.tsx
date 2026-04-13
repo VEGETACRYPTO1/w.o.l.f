@@ -129,25 +129,24 @@ function ParticleSphere({ color }: { color: string }) {
         const dy = oy - point.y;
         const dz = oz - point.z;
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        const influenceRadius = 0.6;
+
+        const influenceRadius = 0.7;
+        const strength = 0.35;
 
         if (dist < influenceRadius) {
-          const force = (1 - dist / influenceRadius) * 0.2;
-          const tx = ox + (dx / dist) * force;
-          const ty = oy + (dy / dist) * force;
-          const tz = oz + (dz / dist) * force;
-          arr[i] += (tx - arr[i]) * 0.15;
-          arr[i + 1] += (ty - arr[i + 1]) * 0.15;
-          arr[i + 2] += (tz - arr[i + 2]) * 0.15;
+          const falloff = 1 - (dist / influenceRadius);
+          arr[i] = ox + (dx / dist) * falloff * strength;
+          arr[i + 1] = oy + (dy / dist) * falloff * strength;
+          arr[i + 2] = oz + (dz / dist) * falloff * strength;
         } else {
-          arr[i] += (ox - arr[i]) * 0.05;
-          arr[i + 1] += (oy - arr[i + 1]) * 0.05;
-          arr[i + 2] += (oz - arr[i + 2]) * 0.05;
+          arr[i] += (ox - arr[i]) * 0.08;
+          arr[i + 1] += (oy - arr[i + 1]) * 0.08;
+          arr[i + 2] += (oz - arr[i + 2]) * 0.08;
         }
       } else {
-        arr[i] += (ox - arr[i]) * 0.05;
-        arr[i + 1] += (oy - arr[i + 1]) * 0.05;
-        arr[i + 2] += (oz - arr[i + 2]) * 0.05;
+        arr[i] += (ox - arr[i]) * 0.08;
+        arr[i + 1] += (oy - arr[i + 1]) * 0.08;
+        arr[i + 2] += (oz - arr[i + 2]) * 0.08;
       }
     }
 
