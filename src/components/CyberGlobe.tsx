@@ -1,11 +1,12 @@
-import { useRef, useMemo, useState, useEffect, useCallback } from "react";
-import { Canvas, useFrame, useThree, extend } from "@react-three/fiber";
+import { useRef, useMemo, useState } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Points, PointMaterial, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { useEffect } from "react";
 
 const modeColors: Record<string, string> = {
   war: "#FF3B3B",
@@ -13,7 +14,7 @@ const modeColors: Record<string, string> = {
   expansion: "#40b870",
 };
 
-// ── Bloom Post-Processing ──
+// ── Bloom ──
 function BloomEffect() {
   const { gl, scene, camera, size } = useThree();
   const composerRef = useRef<EffectComposer | null>(null);
@@ -23,25 +24,21 @@ function BloomEffect() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
-      1.2,   // strength
-      0.4,   // radius
-      0.1    // threshold
+      1.2, 0.4, 0.1
     );
     composer.addPass(bloom);
     composerRef.current = composer;
     return () => { composer.dispose(); };
   }, [gl, scene, camera, size]);
 
-  useFrame(() => {
-    composerRef.current?.render();
-  }, 1);
-
+  useFrame(() => { composerRef.current?.render(); }, 1);
   return null;
 }
 
-// ── Dense Particle Sphere: 4000 particles, additive, subtle rotation ──
+// ── 4000-particle sphere with breathing + opacity pulse ──
 function ParticleSphere({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
+  const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
 
@@ -57,16 +54,27 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
-  useFrame(() => {
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
     if (ref.current) {
       ref.current.rotation.y += 0.0015;
       ref.current.rotation.x += 0.0005;
+      // Breathing
+      const scale = 1 + Math.sin(t * 0.5) * 0.04;
+      ref.current.scale.setScalar(scale);
+    }
+    if (matRef.current) {
+      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
     }
   });
 
   return (
-    <Points ref={ref} positions={positions} stride={3}>
-      <PointMaterial
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        ref={matRef}
         color={color}
         size={0.015}
         transparent
@@ -75,7 +83,7 @@ function ParticleSphere({ color }: { color: string }) {
         depthWrite={false}
         sizeAttenuation
       />
-    </Points>
+    </points>
   );
 }
 
@@ -88,7 +96,6 @@ function ConnectionLines({ color }: { color: string }) {
     const nodeCount = 250;
     const radius = 2;
     const nodes: [number, number, number][] = [];
-
     for (let i = 0; i < nodeCount; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(Math.random() * 2 - 1);
@@ -98,17 +105,16 @@ function ConnectionLines({ color }: { color: string }) {
         radius * Math.cos(phi),
       ]);
     }
-
     const maxDist = 0.5;
-    let count = 0;
-    for (let i = 0; i < nodeCount && count < 120; i++) {
-      for (let j = i + 1; j < nodeCount && count < 120; j++) {
+    let c = 0;
+    for (let i = 0; i < nodeCount && c < 120; i++) {
+      for (let j = i + 1; j < nodeCount && c < 120; j++) {
         const dx = nodes[i][0] - nodes[j][0];
         const dy = nodes[i][1] - nodes[j][1];
         const dz = nodes[i][2] - nodes[j][2];
         if (Math.sqrt(dx * dx + dy * dy + dz * dz) < maxDist) {
           result.push([nodes[i], nodes[j]]);
-          count++;
+          c++;
         }
       }
     }
@@ -131,82 +137,83 @@ function ConnectionLines({ color }: { color: string }) {
   );
 }
 
-// ── Electric Bolts (gold arcs on surface) ──
-function generateBolt(radius: number): [number, number, number][] {
-  const theta1 = Math.random() * Math.PI * 2;
-  const phi1 = Math.acos(Math.random() * 2 - 1);
-  const theta2 = theta1 + (Math.random() - 0.5) * 2.5;
-  const phi2 = phi1 + (Math.random() - 0.5) * 1.5;
-  const p1 = new THREE.Vector3(radius * Math.sin(phi1) * Math.cos(theta1), radius * Math.cos(phi1), radius * Math.sin(phi1) * Math.sin(theta1));
-  const p2 = new THREE.Vector3(radius * Math.sin(phi2) * Math.cos(theta2), radius * Math.cos(phi2), radius * Math.sin(phi2) * Math.sin(theta2));
-  const segments = 14 + Math.floor(Math.random() * 10);
-  const points: [number, number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const pos = new THREE.Vector3().lerpVectors(p1, p2, t).normalize().multiplyScalar(radius);
-    pos.multiplyScalar(1 + Math.sin(t * Math.PI) * 0.1);
-    if (i > 0 && i < segments) {
-      pos.x += (Math.random() - 0.5) * 0.08;
-      pos.y += (Math.random() - 0.5) * 0.08;
-      pos.z += (Math.random() - 0.5) * 0.08;
-    }
-    points.push([pos.x, pos.y, pos.z]);
-  }
-  return points;
+// ── Neuron Signals ──
+interface Signal {
+  id: number;
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+  progress: number;
+  speed: number;
 }
 
-interface BoltData { id: number; points: [number, number, number][]; opacity: number; birth: number; }
-let boltId = 0;
+let signalId = 0;
 
-function ElectricBolts() {
-  const [bolts, setBolts] = useState<BoltData[]>([]);
+function randomSurfacePoint(radius: number): THREE.Vector3 {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(Math.random() * 2 - 1);
+  return new THREE.Vector3(
+    radius * Math.sin(phi) * Math.cos(theta),
+    radius * Math.sin(phi) * Math.sin(theta),
+    radius * Math.cos(phi)
+  );
+}
+
+function NeuronSignals({ color }: { color: string }) {
+  const [signals, setSignals] = useState<Signal[]>([]);
   const nextSpawn = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
+  const maxSignals = 12;
+  const radius = 2;
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
+
+    // Rotate with sphere
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.0015;
       groupRef.current.rotation.x += 0.0005;
     }
-    if (t > nextSpawn.current) {
-      setBolts(prev => [...prev.slice(-8), { id: boltId++, points: generateBolt(2), opacity: 1, birth: t }]);
-      nextSpawn.current = t + 0.2 + Math.random() * 0.6;
+
+    // Spawn signals
+    if (t > nextSpawn.current && signals.length < maxSignals) {
+      const s: Signal = {
+        id: signalId++,
+        start: randomSurfacePoint(radius),
+        end: randomSurfacePoint(radius),
+        progress: 0,
+        speed: 0.008 + Math.random() * 0.008,
+      };
+      setSignals(prev => [...prev, s]);
+      nextSpawn.current = t + 0.3 + Math.random() * 0.5;
     }
-    setBolts(prev => prev.map(b => ({ ...b, opacity: Math.max(0, 1 - (t - b.birth) / 0.35) })).filter(b => b.opacity > 0));
+
+    // Advance and cull
+    setSignals(prev =>
+      prev
+        .map(s => ({ ...s, progress: s.progress + s.speed }))
+        .filter(s => s.progress <= 1)
+    );
   });
 
   return (
     <group ref={groupRef}>
-      {bolts.map(b => (
-        <group key={b.id}>
-          <Line points={b.points} color="#FFD60A" lineWidth={2} transparent opacity={b.opacity * 0.85} />
-          <Line points={b.points} color="#FFEA00" lineWidth={0.7} transparent opacity={b.opacity * 0.3} />
-        </group>
-      ))}
+      {signals.map(s => {
+        // Interpolate along great-circle (spherical lerp on surface)
+        const p = new THREE.Vector3().lerpVectors(s.start, s.end, s.progress).normalize().multiplyScalar(radius);
+        const opacity = Math.sin(s.progress * Math.PI); // fade in/out
+        return (
+          <mesh key={s.id} position={[p.x, p.y, p.z]}>
+            <sphereGeometry args={[0.025, 8, 8]} />
+            <meshBasicMaterial
+              color={color}
+              transparent
+              opacity={opacity * 0.9}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+        );
+      })}
     </group>
-  );
-}
-
-// ── Orbital Rings ──
-function OrbitalRing({ color, radius, speed, tilt }: { color: string; radius: number; speed: number; tilt: number }) {
-  const ref = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshBasicMaterial>(null);
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (ref.current) {
-      ref.current.rotation.z = tilt;
-      ref.current.rotation.y = t * speed;
-    }
-    if (matRef.current) {
-      matRef.current.opacity = 0.15 + Math.sin(t * 1.5 + tilt) * 0.08;
-    }
-  });
-  return (
-    <mesh ref={ref}>
-      <torusGeometry args={[radius, 0.004, 8, 128]} />
-      <meshBasicMaterial ref={matRef} color={color} transparent opacity={0.2} blending={THREE.AdditiveBlending} />
-    </mesh>
   );
 }
 
@@ -243,10 +250,7 @@ function Scene({ color }: { color: string }) {
       <BloomEffect />
       <ParticleSphere color={color} />
       <ConnectionLines color={color} />
-      <ElectricBolts />
-      <OrbitalRing color={color} radius={2.8} speed={0.12} tilt={0.3} />
-      <OrbitalRing color={color} radius={3.2} speed={-0.08} tilt={-0.5} />
-      <OrbitalRing color={color} radius={2.5} speed={0.15} tilt={1.2} />
+      <NeuronSignals color={color} />
       <BackgroundStars />
     </>
   );
