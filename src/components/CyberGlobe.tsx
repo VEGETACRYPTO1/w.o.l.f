@@ -43,8 +43,9 @@ function ParticleSphere({ color }: { color: string }) {
   const radius = 2;
   const isHovered = useRef(false);
   const distortionStrength = useRef(0);
+  const originalPositions = useRef<Float32Array | null>(null);
 
-  const { originalPositions, positions } = useMemo(() => {
+  const positions = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2;
@@ -53,59 +54,56 @@ function ParticleSphere({ color }: { color: string }) {
       pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = radius * Math.cos(phi);
     }
-    return { originalPositions: pos.slice(), positions: pos };
+    originalPositions.current = pos.slice();
+    return pos;
   }, []);
 
   // Track mouse over canvas
   const { gl } = useThree();
   useEffect(() => {
     const canvas = gl.domElement;
-    const onEnter = () => { isHovered.current = true; };
+    const onMove = () => { isHovered.current = true; };
     const onLeave = () => { isHovered.current = false; };
-    canvas.addEventListener("pointerenter", onEnter);
+    canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerleave", onLeave);
-    canvas.addEventListener("pointermove", onEnter);
     return () => {
-      canvas.removeEventListener("pointerenter", onEnter);
+      canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("pointermove", onEnter);
     };
   }, [gl]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
+    if (!ref.current || !originalPositions.current) return;
+
+    const geo = ref.current.geometry;
+    const posAttr = geo.attributes.position as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    const orig = originalPositions.current;
 
     // Smooth distortion ramp
     const target = isHovered.current ? 1 : 0;
     distortionStrength.current += (target - distortionStrength.current) * 0.05;
-    const force = distortionStrength.current * 0.05;
+    const force = distortionStrength.current * 0.08;
 
-    // Apply distortion or restore
-    const posArray = positions;
     for (let i = 0; i < count * 3; i += 3) {
-      const ox = originalPositions[i];
-      const oy = originalPositions[i + 1];
-      const oz = originalPositions[i + 2];
+      const ox = orig[i], oy = orig[i + 1], oz = orig[i + 2];
       const dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
-
-      // Push outward when hovered, restore when not
       const tx = ox + (ox / dist) * force;
       const ty = oy + (oy / dist) * force;
       const tz = oz + (oz / dist) * force;
-
-      posArray[i] += (tx - posArray[i]) * 0.08;
-      posArray[i + 1] += (ty - posArray[i + 1]) * 0.08;
-      posArray[i + 2] += (tz - posArray[i + 2]) * 0.08;
+      arr[i] += (tx - arr[i]) * 0.08;
+      arr[i + 1] += (ty - arr[i + 1]) * 0.08;
+      arr[i + 2] += (tz - arr[i + 2]) * 0.08;
     }
+    posAttr.needsUpdate = true;
 
-    if (ref.current) {
-      (ref.current.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
-      ref.current.rotation.y += 0.0015;
-      ref.current.rotation.x += 0.0005;
-      // Breathing
-      const scale = 1 + Math.sin(t * 0.8) * 0.12;
-      ref.current.scale.setScalar(scale);
-    }
+    // Rotation + breathing
+    ref.current.rotation.y += 0.0015;
+    ref.current.rotation.x += 0.0005;
+    const scale = 1 + Math.sin(t * 0.8) * 0.12;
+    ref.current.scale.setScalar(scale);
+
     if (matRef.current) {
       matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
     }
@@ -114,7 +112,12 @@ function ParticleSphere({ color }: { color: string }) {
   return (
     <points ref={ref}>
       <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute
+          attach="attributes-position"
+          count={count}
+          array={positions}
+          itemSize={3}
+        />
       </bufferGeometry>
       <pointsMaterial
         ref={matRef}
