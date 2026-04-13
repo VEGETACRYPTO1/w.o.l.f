@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Points, PointMaterial, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
+import { FloatingIcons } from "./FloatingIcons";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -391,6 +392,7 @@ function Scene({ color }: { color: string }) {
       <ParticleSphere color={color} />
       <ConnectionLines color={color} />
       <NeuronSignals color={color} />
+      <FloatingIcons color={color} />
       <BackgroundStars />
     </>
   );
