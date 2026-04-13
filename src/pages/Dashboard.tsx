@@ -93,6 +93,7 @@ const priorityDot: Record<string, string> = {
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
+  const floatAnims = useFloatAnimation(popups.length);
   const { config, mode } = useMode();
 
   const completed = tasks.filter((t) => t.done).length;
