@@ -1,89 +1,80 @@
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState, useCallback } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Points, PointMaterial, Line } from "@react-three/drei";
 import * as THREE from "three";
+import { useMode } from "@/contexts/ModeContext";
 
-const GLOBE_COLOR = "#FFD60A";
-const GLOBE_COLOR_DIM = "#FFC300";
-const BOLT_COLOR = "#FFD60A";
+const modeColors: Record<string, string> = {
+  war: "#e04040",
+  rebuild: "#4090e0",
+  expansion: "#40b870",
+};
 
-function GlobeWireframe() {
+function GlobeWireframe({ color }: { color: string }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Mesh>(null);
-  const innerRef = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    const breathe = 1 + Math.sin(t * 0.6) * 0.08;
+    const breathe = 1 + Math.sin(t * 0.8) * 0.06;
     if (meshRef.current) {
-      meshRef.current.rotation.y = t * 0.06;
-      meshRef.current.rotation.x = Math.sin(t * 0.25) * 0.12;
+      meshRef.current.rotation.y = t * 0.08;
+      meshRef.current.rotation.x = Math.sin(t * 0.3) * 0.1;
       meshRef.current.scale.setScalar(breathe);
     }
     if (glowRef.current) {
-      glowRef.current.rotation.y = -t * 0.04;
-      glowRef.current.rotation.x = Math.cos(t * 0.2) * 0.08;
-      glowRef.current.scale.setScalar(breathe * 1.01);
-    }
-    if (innerRef.current) {
-      innerRef.current.rotation.y = t * 0.1;
-      innerRef.current.scale.setScalar(breathe * 0.98);
+      glowRef.current.rotation.y = -t * 0.05;
+      glowRef.current.scale.setScalar(breathe * 1.02);
     }
   });
 
   return (
     <group>
+      {/* Main wireframe globe */}
       <mesh ref={meshRef}>
-        <sphereGeometry args={[2, 48, 36]} />
-        <meshBasicMaterial color={GLOBE_COLOR} wireframe transparent opacity={0.35} />
+        <sphereGeometry args={[2, 32, 24]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={0.25} />
       </mesh>
+      {/* Inner glow sphere */}
       <mesh ref={glowRef}>
-        <sphereGeometry args={[1.96, 24, 18]} />
-        <meshBasicMaterial color={GLOBE_COLOR_DIM} wireframe transparent opacity={0.15} />
-      </mesh>
-      <mesh ref={innerRef}>
-        <sphereGeometry args={[1.5, 20, 16]} />
-        <meshBasicMaterial color={GLOBE_COLOR} wireframe transparent opacity={0.1} />
-      </mesh>
-      {/* Solid inner glow core */}
-      <mesh>
-        <sphereGeometry args={[0.6, 16, 16]} />
-        <meshBasicMaterial color={GLOBE_COLOR} transparent opacity={0.08} />
+        <sphereGeometry args={[1.95, 16, 12]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={0.08} />
       </mesh>
     </group>
   );
 }
 
-function OrbitalRing({ radius, speed, tilt, opacity = 0.3 }: { radius: number; speed: number; tilt: number; opacity?: number }) {
+function OrbitalRing({ color, radius, speed, tilt }: { color: string; radius: number; speed: number; tilt: number }) {
   const ref = useRef<THREE.Mesh>(null);
 
   useFrame(({ clock }) => {
     if (ref.current) {
       ref.current.rotation.z = tilt;
       ref.current.rotation.y = clock.getElapsedTime() * speed;
-      const breathe = 1 + Math.sin(clock.getElapsedTime() * 0.6) * 0.08;
+      const breathe = 1 + Math.sin(clock.getElapsedTime() * 0.8) * 0.06;
       ref.current.scale.setScalar(breathe);
     }
   });
 
   return (
     <mesh ref={ref}>
-      <torusGeometry args={[radius, 0.008, 8, 128]} />
-      <meshBasicMaterial color={GLOBE_COLOR} transparent opacity={opacity} />
+      <torusGeometry args={[radius, 0.005, 8, 128]} />
+      <meshBasicMaterial color={color} transparent opacity={0.3} />
     </mesh>
   );
 }
 
-function DenseParticleField() {
+function ParticleField({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
 
   const [positions] = useMemo(() => {
-    const count = 4000;
+    const count = 1500;
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
+      // Distribute on sphere surface with some scatter
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const r = 1.8 + (Math.random()) * 0.6;
+      const r = 2 + (Math.random() - 0.5) * 1.5;
       pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = r * Math.cos(phi);
@@ -93,175 +84,194 @@ function DenseParticleField() {
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.rotation.y = clock.getElapsedTime() * 0.04;
-      const breathe = 1 + Math.sin(clock.getElapsedTime() * 0.6) * 0.08;
+      ref.current.rotation.y = clock.getElapsedTime() * 0.03;
+      const breathe = 1 + Math.sin(clock.getElapsedTime() * 0.8) * 0.06;
       ref.current.scale.setScalar(breathe);
     }
   });
 
   return (
     <Points ref={ref} positions={positions} stride={3}>
-      <PointMaterial transparent color={GLOBE_COLOR} size={0.012} sizeAttenuation depthWrite={false} opacity={0.7} />
+      <PointMaterial
+        transparent
+        color={color}
+        size={0.015}
+        sizeAttenuation
+        depthWrite={false}
+        opacity={0.6}
+      />
     </Points>
   );
 }
 
-function OuterParticles() {
+function FloatingParticles({ color }: { color: string }) {
   const ref = useRef<THREE.Points>(null);
 
   const [positions] = useMemo(() => {
-    const count = 800;
+    const count = 300;
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 2.5 + Math.random() * 2;
-      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = r * Math.cos(phi);
+      pos[i * 3] = (Math.random() - 0.5) * 12;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 6;
     }
     return [pos];
   }, []);
 
   useFrame(({ clock }) => {
     if (ref.current) {
-      ref.current.rotation.y = clock.getElapsedTime() * 0.015;
-      ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.1) * 0.03;
+      ref.current.rotation.y = clock.getElapsedTime() * 0.01;
+      ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.2) * 0.02;
     }
   });
 
   return (
     <Points ref={ref} positions={positions} stride={3}>
-      <PointMaterial transparent color={GLOBE_COLOR_DIM} size={0.018} sizeAttenuation depthWrite={false} opacity={0.35} />
+      <PointMaterial
+        transparent
+        color={color}
+        size={0.02}
+        sizeAttenuation
+        depthWrite={false}
+        opacity={0.3}
+      />
     </Points>
   );
 }
 
-// Radial spikes/rays emanating from globe
-function EnergyRays() {
-  const groupRef = useRef<THREE.Group>(null);
-
-  const rays = useMemo(() => {
-    return Array.from({ length: 30 }, () => {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const start = 2.05;
-      const end = start + 0.3 + Math.random() * 1.2;
-      const dir = new THREE.Vector3(
-        Math.sin(phi) * Math.cos(theta),
-        Math.sin(phi) * Math.sin(theta),
-        Math.cos(phi)
-      );
-      return {
-        points: [
-          [dir.x * start, dir.y * start, dir.z * start] as [number, number, number],
-          [dir.x * end, dir.y * end, dir.z * end] as [number, number, number],
-        ],
-        opacity: 0.15 + Math.random() * 0.25,
-      };
-    });
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y = clock.getElapsedTime() * 0.06;
-      const breathe = 1 + Math.sin(clock.getElapsedTime() * 0.6) * 0.08;
-      groupRef.current.scale.setScalar(breathe);
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      {rays.map((ray, i) => (
-        <Line key={i} points={ray.points} color={GLOBE_COLOR} lineWidth={0.8} transparent opacity={ray.opacity} />
-      ))}
-    </group>
-  );
-}
-
+// Generate a lightning arc between two random points on the globe surface
 function generateBolt(radius: number): [number, number, number][] {
   const theta1 = Math.random() * Math.PI * 2;
   const phi1 = Math.acos(2 * Math.random() - 1);
   const theta2 = theta1 + (Math.random() - 0.5) * 2.5;
   const phi2 = phi1 + (Math.random() - 0.5) * 1.5;
 
-  const p1 = new THREE.Vector3(radius * Math.sin(phi1) * Math.cos(theta1), radius * Math.cos(phi1), radius * Math.sin(phi1) * Math.sin(theta1));
-  const p2 = new THREE.Vector3(radius * Math.sin(phi2) * Math.cos(theta2), radius * Math.cos(phi2), radius * Math.sin(phi2) * Math.sin(theta2));
+  const p1 = new THREE.Vector3(
+    radius * Math.sin(phi1) * Math.cos(theta1),
+    radius * Math.cos(phi1),
+    radius * Math.sin(phi1) * Math.sin(theta1)
+  );
+  const p2 = new THREE.Vector3(
+    radius * Math.sin(phi2) * Math.cos(theta2),
+    radius * Math.cos(phi2),
+    radius * Math.sin(phi2) * Math.sin(theta2)
+  );
 
-  const segments = 14 + Math.floor(Math.random() * 8);
+  const segments = 12 + Math.floor(Math.random() * 8);
   const points: [number, number, number][] = [];
+
   for (let i = 0; i <= segments; i++) {
     const t = i / segments;
+    // Interpolate on sphere surface (slerp-like) then add jitter
     const pos = new THREE.Vector3().lerpVectors(p1, p2, t).normalize().multiplyScalar(radius);
-    const arcLift = Math.sin(t * Math.PI) * 0.2;
+    // Push outward slightly at midpoints for arc effect
+    const arcLift = Math.sin(t * Math.PI) * 0.15;
     pos.multiplyScalar(1 + arcLift);
+    // Add random jitter for electric feel
     if (i > 0 && i < segments) {
-      pos.x += (Math.random() - 0.5) * 0.15;
-      pos.y += (Math.random() - 0.5) * 0.15;
-      pos.z += (Math.random() - 0.5) * 0.15;
+      pos.x += (Math.random() - 0.5) * 0.12;
+      pos.y += (Math.random() - 0.5) * 0.12;
+      pos.z += (Math.random() - 0.5) * 0.12;
     }
     points.push([pos.x, pos.y, pos.z]);
   }
   return points;
 }
 
-interface BoltData { id: number; points: [number, number, number][]; opacity: number; birth: number; }
+interface BoltData {
+  id: number;
+  points: [number, number, number][];
+  opacity: number;
+  birth: number;
+}
+
 let boltIdCounter = 0;
 
 function ElectricBolts() {
+  const boltColor = "#FFD60A";
   const [bolts, setBolts] = useState<BoltData[]>([]);
   const nextSpawn = useRef(0);
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    const breathe = 1 + Math.sin(t * 0.6) * 0.08;
+    const breathe = 1 + Math.sin(t * 0.8) * 0.06;
     if (groupRef.current) {
-      groupRef.current.rotation.y = t * 0.06;
-      groupRef.current.rotation.x = Math.sin(t * 0.25) * 0.12;
+      groupRef.current.rotation.y = t * 0.08;
+      groupRef.current.rotation.x = Math.sin(t * 0.3) * 0.1;
       groupRef.current.scale.setScalar(breathe);
     }
+
+    // Spawn new bolts randomly
     if (t > nextSpawn.current) {
-      const newBolt: BoltData = { id: boltIdCounter++, points: generateBolt(2), opacity: 1, birth: t };
-      setBolts((prev) => [...prev.slice(-8), newBolt]);
-      nextSpawn.current = t + 0.15 + Math.random() * 0.8;
+      const newBolt: BoltData = {
+        id: boltIdCounter++,
+        points: generateBolt(2),
+        opacity: 1,
+        birth: t,
+      };
+      setBolts((prev) => [...prev.slice(-6), newBolt]); // max 7 bolts
+      nextSpawn.current = t + 0.3 + Math.random() * 1.2; // 0.3-1.5s interval
     }
-    setBolts((prev) => prev.map((b) => ({ ...b, opacity: Math.max(0, 1 - (t - b.birth) / 0.4) })).filter((b) => b.opacity > 0));
+
+    // Fade out old bolts
+    setBolts((prev) =>
+      prev
+        .map((b) => ({ ...b, opacity: Math.max(0, 1 - (t - b.birth) / 0.5) }))
+        .filter((b) => b.opacity > 0)
+    );
   });
 
   return (
     <group ref={groupRef}>
       {bolts.map((bolt) => (
-        <Line key={bolt.id} points={bolt.points} color={BOLT_COLOR} lineWidth={1.8} transparent opacity={bolt.opacity * 0.9} />
+        <Line
+          key={bolt.id}
+          points={bolt.points}
+          color={boltColor}
+          lineWidth={1.5}
+          transparent
+          opacity={bolt.opacity * 0.8}
+        />
       ))}
     </group>
   );
 }
 
-function Scene() {
+function Scene({ color }: { color: string }) {
   return (
     <>
-      <GlobeWireframe />
+      <GlobeWireframe color={color} />
       <ElectricBolts />
-      <DenseParticleField />
-      <OuterParticles />
-      <EnergyRays />
-      <OrbitalRing radius={2.8} speed={0.12} tilt={0.3} />
-      <OrbitalRing radius={3.2} speed={-0.08} tilt={-0.5} opacity={0.2} />
-      <OrbitalRing radius={2.5} speed={0.15} tilt={1.2} />
-      <OrbitalRing radius={3.6} speed={0.06} tilt={0.8} opacity={0.15} />
-      <OrbitalRing radius={2.2} speed={-0.1} tilt={-1.0} opacity={0.2} />
+      <ParticleField color={color} />
+      <FloatingParticles color={color} />
+      <OrbitalRing color={color} radius={2.8} speed={0.12} tilt={0.3} />
+      <OrbitalRing color={color} radius={3.2} speed={-0.08} tilt={-0.5} />
+      <OrbitalRing color={color} radius={2.5} speed={0.15} tilt={1.2} />
     </>
   );
 }
 
 export function CyberGlobe() {
+  const { mode } = useMode();
+  const color = modeColors[mode] || modeColors.war;
+
   return (
     <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-      <Canvas camera={{ position: [0, 0, 5.5], fov: 50 }} gl={{ alpha: true, antialias: true }} style={{ background: "transparent" }}>
-        <Scene />
+      <Canvas
+        camera={{ position: [0, 0, 5.5], fov: 50 }}
+        gl={{ alpha: true, antialias: true }}
+        style={{ background: "transparent" }}
+      >
+        <Scene color={color} />
       </Canvas>
-      <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at center, transparent 25%, hsl(var(--background)) 70%)` }} />
+      {/* Radial vignette overlay */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `radial-gradient(ellipse at center, transparent 20%, hsl(var(--background)) 75%)`,
+        }}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useCallback } from "react";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2,
   Circle,
@@ -65,15 +65,16 @@ const popups: PopupConfig[] = [
   { id: "mode", label: "Mode", icon: <ChevronRight className="h-3.5 w-3.5" />, anchor: [40, 75] },
 ];
 
-// Generate random drift keyframes - full viewport range
+// Generate random drift keyframes for each popup
 function useFloatAnimation(count: number) {
   return useMemo(() => {
     return Array.from({ length: count }, () => {
-      const duration = 25 + Math.random() * 20;
-      const steps = 6 + Math.floor(Math.random() * 4);
-      // Use vw/vh scale: allow icons to drift across entire screen
-      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * window.innerWidth * 0.7);
-      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * window.innerHeight * 0.6);
+      const duration = 20 + Math.random() * 15; // 20-35s for slower movement
+      const xAmplitude = 30 + Math.random() * 40; // 30-70% range
+      const yAmplitude = 20 + Math.random() * 30; // 20-50% range
+      const steps = 5 + Math.floor(Math.random() * 4);
+      const xKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * xAmplitude);
+      const yKeys = Array.from({ length: steps }, () => (Math.random() - 0.5) * 2 * yAmplitude);
       xKeys.push(xKeys[0]);
       yKeys.push(yKeys[0]);
       return { duration, xKeys, yKeys };
@@ -90,10 +91,8 @@ const priorityDot: Record<string, string> = {
 export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
-  const [dragging, setDragging] = useState<PopupId | null>(null);
   const floatAnims = useFloatAnimation(popups.length);
   const { config, mode } = useMode();
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const completed = tasks.filter((t) => t.done).length;
 
@@ -195,7 +194,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+    <div className="absolute inset-0 overflow-hidden">
       {/* Greeting - top center */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -207,24 +206,19 @@ export default function Dashboard() {
         </h1>
       </motion.div>
 
-      {/* Floating popups - draggable */}
+      {/* Floating popups */}
       {popups.map((popup, i) => {
         const anim = floatAnims[i];
         const isExpanded = expanded === popup.id;
-        const isDragging = dragging === popup.id;
         return (
           <motion.div
             key={popup.id}
-            drag
-            dragMomentum={false}
-            dragConstraints={containerRef}
-            onDragStart={() => setDragging(popup.id)}
-            onDragEnd={() => setDragging(null)}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{
               opacity: 1,
               scale: 1,
-              ...(isDragging || isExpanded ? {} : { x: anim.xKeys, y: anim.yKeys }),
+              x: isExpanded ? 0 : anim.xKeys,
+              y: isExpanded ? 0 : anim.yKeys,
             }}
             transition={{
               opacity: { delay: i * 0.08, duration: 0.4 },
@@ -236,8 +230,7 @@ export default function Dashboard() {
               position: "absolute",
               top: `${popup.anchor[0]}%`,
               left: `${popup.anchor[1]}%`,
-              zIndex: isDragging ? 50 : 20,
-              cursor: isDragging ? "grabbing" : "grab",
+              zIndex: 20,
             }}
           >
           <AnimatePresence mode="wait">
@@ -266,9 +259,9 @@ export default function Dashboard() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                whileHover={{ scale: 1.15 }}
+                whileHover={{ scale: 1.1 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => { if (!isDragging) setExpanded(popup.id); }}
+                onClick={() => setExpanded(popup.id)}
                 className="glass-card h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary hover:border-primary/30 transition-colors group"
               >
                 <span className="group-hover:animate-pulse-glow">{popup.icon}</span>
