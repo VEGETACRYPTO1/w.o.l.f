@@ -195,7 +195,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div ref={containerRef} className="absolute inset-0 overflow-hidden">
       {/* Greeting - top center */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
