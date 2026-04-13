@@ -206,9 +206,6 @@ export default function Dashboard() {
         <h1 className="text-xl font-heading font-bold tracking-wide text-foreground/90">
           SK10
         </h1>
-        <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground mt-0.5">
-          Command Center • {config.label}
-        </p>
       </motion.div>
 
       {/* Floating popups */}
@@ -264,19 +261,12 @@ export default function Dashboard() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.97 }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setExpanded(popup.id)}
-                className="glass-card rounded-lg border border-border/40 px-3 py-2 flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors group"
+                className="glass-card h-10 w-10 rounded-full border border-border/40 flex items-center justify-center text-primary hover:border-primary/30 transition-colors group"
               >
-                <span className="text-primary group-hover:animate-pulse-glow">{popup.icon}</span>
-                <span className="font-heading uppercase tracking-wider text-[10px]">{popup.label}</span>
-                {popup.id === "ops" && (
-                  <span className="ml-1 font-mono text-primary text-[10px]">{completed}/{tasks.length}</span>
-                )}
-                {popup.id === "habits" && (
-                  <span className="ml-1 font-mono text-primary text-[10px]">{habits.filter(h => h.done).length}/{habits.length}</span>
-                )}
+                <span className="group-hover:animate-pulse-glow">{popup.icon}</span>
               </motion.button>
             )}
           </AnimatePresence>
