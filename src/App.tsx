@@ -6,7 +6,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ModeProvider } from "@/contexts/ModeContext";
 import { AppLayout } from "@/components/AppLayout";
 import Dashboard from "./pages/Dashboard";
-import Chat from "./pages/Chat";
 import Goals from "./pages/Goals";
 import Habits from "./pages/Habits";
 import Analytics from "./pages/Analytics";
@@ -24,7 +23,6 @@ const App = () => (
           <AppLayout>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/chat" element={<Chat />} />
               <Route path="/goals" element={<Goals />} />
               <Route path="/habits" element={<Habits />} />
               <Route path="/analytics" element={<Analytics />} />
