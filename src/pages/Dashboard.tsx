@@ -176,7 +176,7 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [expanded, setExpanded] = useState<PopupId | null>(null);
   const [burstId, setBurstId] = useState<PopupId | null>(null);
-  const floatAnims = useFloatAnimation(popups.length);
+  const iconPositions = useIconPositions(popups.length);
   const { config } = useMode();
 
   const completed = tasks.filter((t) => t.done).length;
@@ -297,31 +297,18 @@ export default function Dashboard() {
       </motion.div>
 
       {popups.map((popup, i) => {
-        const anim = floatAnims[i];
+        const pos = iconPositions[i];
         const isExpanded = expanded === popup.id;
 
         return (
-          <motion.div
+          <div
             key={popup.id}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{
-              opacity: 1,
-              x: isExpanded ? 0 : anim.xKeys,
-              y: isExpanded ? 0 : anim.yKeys,
-              scale: isExpanded ? 1 : anim.scaleKeys,
-              rotate: isExpanded ? 0 : anim.rotateKeys,
-            }}
-            transition={{
-              opacity: { delay: i * 0.08, duration: 0.4 },
-              x: { duration: anim.duration, repeat: Infinity, ease: "easeInOut" },
-              y: { duration: anim.duration * 0.9, repeat: Infinity, ease: "easeInOut" },
-              scale: { duration: anim.duration * 0.7, repeat: Infinity, ease: "easeInOut" },
-              rotate: { duration: anim.duration * 0.8, repeat: Infinity, ease: "easeInOut" },
-            }}
             style={{
               position: "absolute",
               top: `${popup.anchor[0]}%`,
               left: `${popup.anchor[1]}%`,
+              transform: `translate(${isExpanded ? 0 : pos.x}px, ${isExpanded ? 0 : pos.y}px)`,
+              transition: isExpanded ? "transform 0.3s ease-out" : undefined,
               zIndex: 20,
             }}
           >
@@ -363,7 +350,7 @@ export default function Dashboard() {
                 </motion.button>
               )}
             </AnimatePresence>
-          </motion.div>
+          </div>
         );
       })}
     </div>
