@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Send, X, User, Loader2, Swords, Leaf } from "lucide-react";
+import { Send, X, User, Loader2, Swords, Leaf } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ export function ChatOverlay() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFirstMessage, setIsFirstMessage] = useState(true);
   const [awaitingModeSelection, setAwaitingModeSelection] = useState(false);
+  const [lastWasModePrompt, setLastWasModePrompt] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -24,17 +25,19 @@ export function ChatOverlay() {
   }, [messages]);
 
   const handleReset = () => {
-    setMessages([]);
-    setIsFirstMessage(true);
-    setAwaitingModeSelection(false);
+    if (lastWasModePrompt) return;
+    setAwaitingModeSelection(true);
+    setIsFirstMessage(false);
     setIsLoading(false);
-    setInput("");
+    setLastWasModePrompt(true);
+    setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
     resetSphere();
   };
 
   const selectMode = (selectedMode: "war" | "relax") => {
     setMode(selectedMode);
     setAwaitingModeSelection(false);
+    setLastWasModePrompt(false);
     const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
     setMessages((prev) => [...prev, { role: "assistant", content: label }]);
   };
@@ -49,6 +52,7 @@ export function ChatOverlay() {
     if (isFirstMessage) {
       setIsFirstMessage(false);
       setAwaitingModeSelection(true);
+      setLastWasModePrompt(true);
       setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
       return;
     }
@@ -61,6 +65,7 @@ export function ChatOverlay() {
       return;
     }
 
+    setLastWasModePrompt(false);
     setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {

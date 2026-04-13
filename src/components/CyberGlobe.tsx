@@ -103,7 +103,6 @@ function ParticleSphere({ color }: { color: string }) {
   const count = 4000;
   const radius = 2;
   const originalPositions = useRef<Float32Array | null>(null);
-  const velocities = useRef<Float32Array | null>(null);
   const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
 
   const positions = useMemo(() => {
@@ -116,23 +115,20 @@ function ParticleSphere({ color }: { color: string }) {
       pos[i * 3 + 2] = radius * Math.cos(phi);
     }
     originalPositions.current = pos.slice();
-    velocities.current = new Float32Array(pos.length).fill(0);
     return pos;
   }, []);
 
   // Reset sphere: snap all particles back to original positions
   const doReset = useCallback(() => {
-    if (!ref.current || !originalPositions.current || !velocities.current) return;
+    if (!ref.current || !originalPositions.current) return;
     const pos = (ref.current.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     const orig = originalPositions.current;
     for (let i = 0; i < pos.length; i++) {
       pos[i] = orig[i];
-      velocities.current[i] = 0;
     }
     ref.current.geometry.attributes.position.needsUpdate = true;
   }, []);
 
-  // Listen for global reset calls
   useEffect(() => {
     resetListeners.add(doReset);
     return () => { resetListeners.delete(doReset); };
@@ -145,12 +141,11 @@ function ParticleSphere({ color }: { color: string }) {
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
-    if (!ref.current || !originalPositions.current || !velocities.current) return;
+    if (!ref.current || !originalPositions.current) return;
 
     const geometry = ref.current.geometry;
     const pos = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     const orig = originalPositions.current;
-    const vel = velocities.current;
     const { hovering, point } = hitState.current;
 
     let localHit: THREE.Vector3 | null = null;
@@ -158,55 +153,41 @@ function ParticleSphere({ color }: { color: string }) {
       localHit = ref.current.worldToLocal(point.clone());
     }
 
-    const now = performance.now();
-
     for (let i = 0; i < pos.length; i += 3) {
       const ox = orig[i];
       const oy = orig[i + 1];
       const oz = orig[i + 2];
 
-      const px = pos[i];
-      const py = pos[i + 1];
-      const pz = pos[i + 2];
+      // Always reset target to original
+      let nx = ox;
+      let ny = oy;
+      let nz = oz;
 
       if (hovering && localHit) {
         const dot = ox * localHit.x + oy * localHit.y + oz * localHit.z;
         if (dot > 0) {
-          const dx = px - localHit.x;
-          const dy = py - localHit.y;
-          const dz = pz - localHit.z;
+          const dx = ox - localHit.x;
+          const dy = oy - localHit.y;
+          const dz = oz - localHit.z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
 
           const interactionRadius = 0.7;
-          const strength = 0.55;
+          const strength = 0.5;
 
           if (dist < interactionRadius) {
             const falloff = 1 - dist / interactionRadius;
-
             const force = falloff * strength;
-            vel[i] += (dx / dist) * force;
-            vel[i + 1] += (dy / dist) * force;
-            vel[i + 2] += (dz / dist) * force;
-
-            const ripple = Math.sin(dist * 15 - now * 0.01) * 0.02 * falloff;
-            vel[i] += (dx / dist) * ripple;
-            vel[i + 1] += (dy / dist) * ripple;
-            vel[i + 2] += (dz / dist) * ripple;
+            nx += (dx / dist) * force;
+            ny += (dy / dist) * force;
+            nz += (dz / dist) * force;
           }
         }
       }
 
-      vel[i] += (ox - px) * 0.08;
-      vel[i + 1] += (oy - py) * 0.08;
-      vel[i + 2] += (oz - pz) * 0.08;
-
-      vel[i] *= 0.82;
-      vel[i + 1] *= 0.82;
-      vel[i + 2] *= 0.82;
-
-      pos[i] += vel[i];
-      pos[i + 1] += vel[i + 1];
-      pos[i + 2] += vel[i + 2];
+      // Smooth interpolation — no drift
+      pos[i] += (nx - pos[i]) * 0.15;
+      pos[i + 1] += (ny - pos[i + 1]) * 0.15;
+      pos[i + 2] += (nz - pos[i + 2]) * 0.15;
     }
 
     geometry.attributes.position.needsUpdate = true;
