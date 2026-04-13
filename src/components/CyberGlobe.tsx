@@ -41,8 +41,8 @@ function ParticleSphere({ color }: { color: string }) {
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
   const radius = 2;
-  const isHovered = useRef(false);
-  const distortionStrength = useRef(0);
+  const mousePos = useRef(new THREE.Vector3(100, 100, 0)); // far away initially
+  const isActive = useRef(false);
   const originalPositions = useRef<Float32Array | null>(null);
 
   const positions = useMemo(() => {
@@ -58,19 +58,56 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
-  // Track mouse over canvas
-  const { gl } = useThree();
+  // Convert mouse screen position to 3D world coordinates on a plane at z=0
+  const { gl, camera } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const ndcMouse = useMemo(() => new THREE.Vector2(), []);
+
   useEffect(() => {
     const canvas = gl.domElement;
-    const onMove = () => { isHovered.current = true; };
-    const onLeave = () => { isHovered.current = false; };
+    const onMove = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      ndcMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      ndcMouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndcMouse, camera);
+      // Intersect with a plane at z=0 to get world position
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      const target = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, target);
+      if (target) mousePos.current.copy(target);
+      isActive.current = true;
+    };
+    const onLeave = () => {
+      isActive.current = false;
+    };
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerleave", onLeave);
+    // Also handle touch
+    const onTouch = (e: TouchEvent) => {
+      if (e.touches.length === 0) return;
+      const touch = e.touches[0];
+      const rect = canvas.getBoundingClientRect();
+      ndcMouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+      ndcMouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndcMouse, camera);
+      const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+      const target = new THREE.Vector3();
+      raycaster.ray.intersectPlane(plane, target);
+      if (target) mousePos.current.copy(target);
+      isActive.current = true;
+    };
+    const onTouchEnd = () => { isActive.current = false; };
+    canvas.addEventListener("touchmove", onTouch, { passive: true });
+    canvas.addEventListener("touchstart", onTouch, { passive: true });
+    canvas.addEventListener("touchend", onTouchEnd);
     return () => {
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
+      canvas.removeEventListener("touchmove", onTouch);
+      canvas.removeEventListener("touchstart", onTouch);
+      canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [gl]);
+  }, [gl, camera, raycaster, ndcMouse]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
@@ -80,21 +117,35 @@ function ParticleSphere({ color }: { color: string }) {
     const posAttr = geo.attributes.position as THREE.BufferAttribute;
     const arr = posAttr.array as Float32Array;
     const orig = originalPositions.current;
-
-    // Smooth distortion ramp
-    const target = isHovered.current ? 1 : 0;
-    distortionStrength.current += (target - distortionStrength.current) * 0.05;
-    const force = distortionStrength.current * 0.08;
+    const mp = mousePos.current;
 
     for (let i = 0; i < count * 3; i += 3) {
       const ox = orig[i], oy = orig[i + 1], oz = orig[i + 2];
-      const dist = Math.sqrt(ox * ox + oy * oy + oz * oz);
-      const tx = ox + (ox / dist) * force;
-      const ty = oy + (oy / dist) * force;
-      const tz = oz + (oz / dist) * force;
-      arr[i] += (tx - arr[i]) * 0.08;
-      arr[i + 1] += (ty - arr[i + 1]) * 0.08;
-      arr[i + 2] += (tz - arr[i + 2]) * 0.08;
+
+      // Distance from this particle to the mouse ray intersection point
+      const dx = ox - mp.x;
+      const dy = oy - mp.y;
+      const dz = oz - mp.z;
+      const distToMouse = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      // Repulsion: particles close to mouse get pushed outward strongly
+      const influenceRadius = 1.8;
+      let tx = ox, ty = oy, tz = oz;
+
+      if (isActive.current && distToMouse < influenceRadius) {
+        const strength = (1 - distToMouse / influenceRadius) * 0.6;
+        const distFromCenter = Math.sqrt(ox * ox + oy * oy + oz * oz);
+        // Push radially outward from sphere center
+        tx = ox + (ox / distFromCenter) * strength;
+        ty = oy + (oy / distFromCenter) * strength;
+        tz = oz + (oz / distFromCenter) * strength;
+      }
+
+      // Smooth interpolation (fast react, smooth return)
+      const lerp = isActive.current ? 0.15 : 0.04;
+      arr[i] += (tx - arr[i]) * lerp;
+      arr[i + 1] += (ty - arr[i + 1]) * lerp;
+      arr[i + 2] += (tz - arr[i + 2]) * lerp;
     }
     posAttr.needsUpdate = true;
 
