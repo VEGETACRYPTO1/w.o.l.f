@@ -1,12 +1,30 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Bot, User, Loader2, Swords, Leaf } from "lucide-react";
+import { Send, User, Loader2, Swords, Leaf } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import { resetSphere } from "@/components/CyberGlobe";
 
 const MODE_SELECTION_MSG = "Choose your mode:";
+
+function WolfLogo({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5 cursor-pointer hover:scale-110 transition-transform"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid hsl(var(--primary) / 0.3)",
+        boxShadow: "0 0 10px hsl(var(--primary) / 0.15)",
+      }}
+      title="Reset W.O.L.F"
+    >
+      <span className="text-sm leading-none">🐺</span>
+    </button>
+  );
+}
 
 export default function Chat() {
   const { mode, setMode, config } = useMode();
@@ -20,6 +38,15 @@ export default function Chat() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const handleReset = () => {
+    setMessages([]);
+    setIsFirstMessage(true);
+    setAwaitingModeSelection(false);
+    setIsLoading(false);
+    setInput("");
+    resetSphere();
+  };
 
   const selectMode = (selectedMode: "war" | "relax") => {
     setMode(selectedMode);
@@ -35,7 +62,6 @@ export default function Chat() {
     setMessages(newMessages);
     setInput("");
 
-    // First message → show mode selection
     if (isFirstMessage) {
       setIsFirstMessage(false);
       setAwaitingModeSelection(true);
@@ -43,23 +69,14 @@ export default function Chat() {
       return;
     }
 
-    // Awaiting mode selection → check for war/relax keyword
     if (awaitingModeSelection) {
       const lower = input.trim().toLowerCase();
-      if (lower.includes("war")) {
-        selectMode("war");
-        return;
-      }
-      if (lower.includes("relax")) {
-        selectMode("relax");
-        return;
-      }
-      // Invalid selection
+      if (lower.includes("war")) { selectMode("war"); return; }
+      if (lower.includes("relax")) { selectMode("relax"); return; }
       setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "War" or "Relax" to choose your mode.' }]);
       return;
     }
 
-    // Normal AI flow
     setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
@@ -74,7 +91,12 @@ export default function Chat() {
     };
 
     await streamWolfChat({
-      messages: newMessages.filter((m) => m.content !== MODE_SELECTION_MSG && !m.content.startsWith("⚔️ War Mode activated") && !m.content.startsWith("🧘 Relax Mode activated") && m.content !== 'Please reply with "War" or "Relax" to choose your mode.'),
+      messages: newMessages.filter((m) =>
+        m.content !== MODE_SELECTION_MSG &&
+        !m.content.startsWith("⚔️ War Mode activated") &&
+        !m.content.startsWith("🧘 Relax Mode activated") &&
+        m.content !== 'Please reply with "War" or "Relax" to choose your mode.'
+      ),
       mode,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
@@ -87,9 +109,12 @@ export default function Chat() {
 
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-7rem)]">
-      <div className="mb-4">
-        <h1 className="text-2xl font-heading font-bold">W.O.L.F</h1>
-        <p className="text-xs text-muted-foreground">{config.tone}</p>
+      <div className="mb-4 flex items-center gap-3">
+        <WolfLogo onClick={handleReset} />
+        <div>
+          <h1 className="text-2xl font-heading font-bold">W.O.L.F</h1>
+          <p className="text-xs text-muted-foreground">{config.tone}</p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 pb-4">
@@ -106,8 +131,9 @@ export default function Chat() {
             className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
           >
             {msg.role === "assistant" && (
-              <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                <Bot className="h-4 w-4 text-primary" />
+              <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                style={{ background: "rgba(255,255,255,0.05)" }}>
+                <span className="text-sm leading-none">🐺</span>
               </div>
             )}
             <div
@@ -131,7 +157,6 @@ export default function Chat() {
           </motion.div>
         ))}
 
-        {/* Mode selection buttons */}
         {awaitingModeSelection && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 pl-10">
             <button
@@ -165,8 +190,9 @@ export default function Chat() {
 
         {isLoading && messages[messages.length - 1]?.role === "user" && (
           <div className="flex gap-3">
-            <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
-              <Loader2 className="h-4 w-4 text-primary animate-spin" />
+            <div className="h-7 w-7 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "rgba(255,255,255,0.05)" }}>
+              <span className="text-sm leading-none animate-pulse">🐺</span>
             </div>
             <div className="px-4 py-3 rounded-lg bg-card border border-border text-sm text-muted-foreground">
               Thinking...

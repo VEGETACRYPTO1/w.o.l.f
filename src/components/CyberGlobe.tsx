@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useCallback } from "react";
+import { useRef, useMemo, useState, useCallback, createContext, useContext } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Points, PointMaterial, Line } from "@react-three/drei";
 import * as THREE from "three";
@@ -14,6 +14,15 @@ const modeColors: Record<string, string> = {
   expansion: "#40b870",
   relax: "#3db89a",
 };
+
+// Global reset trigger
+let resetTrigger = 0;
+const resetListeners: Set<() => void> = new Set();
+
+export function resetSphere() {
+  resetTrigger++;
+  resetListeners.forEach((fn) => fn());
+}
 
 // ── Bloom ──
 function BloomEffect() {
@@ -111,6 +120,24 @@ function ParticleSphere({ color }: { color: string }) {
     return pos;
   }, []);
 
+  // Reset sphere: snap all particles back to original positions
+  const doReset = useCallback(() => {
+    if (!ref.current || !originalPositions.current || !velocities.current) return;
+    const pos = (ref.current.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+    const orig = originalPositions.current;
+    for (let i = 0; i < pos.length; i++) {
+      pos[i] = orig[i];
+      velocities.current[i] = 0;
+    }
+    ref.current.geometry.attributes.position.needsUpdate = true;
+  }, []);
+
+  // Listen for global reset calls
+  useEffect(() => {
+    resetListeners.add(doReset);
+    return () => { resetListeners.delete(doReset); };
+  }, [doReset]);
+
   const handleHit = useCallback((hovering: boolean, point: THREE.Vector3 | null) => {
     hitState.current.hovering = hovering;
     hitState.current.point = point;
@@ -126,7 +153,6 @@ function ParticleSphere({ color }: { color: string }) {
     const vel = velocities.current;
     const { hovering, point } = hitState.current;
 
-    // Convert hit point to local space (accounts for rotation)
     let localHit: THREE.Vector3 | null = null;
     if (hovering && point) {
       localHit = ref.current.worldToLocal(point.clone());
@@ -144,7 +170,6 @@ function ParticleSphere({ color }: { color: string }) {
       const pz = pos[i + 2];
 
       if (hovering && localHit) {
-        // Front-side only: skip particles facing away
         const dot = ox * localHit.x + oy * localHit.y + oz * localHit.z;
         if (dot > 0) {
           const dx = px - localHit.x;
@@ -158,13 +183,11 @@ function ParticleSphere({ color }: { color: string }) {
           if (dist < interactionRadius) {
             const falloff = 1 - dist / interactionRadius;
 
-            // Liquid push
             const force = falloff * strength;
             vel[i] += (dx / dist) * force;
             vel[i + 1] += (dy / dist) * force;
             vel[i + 2] += (dz / dist) * force;
 
-            // Ripple
             const ripple = Math.sin(dist * 15 - now * 0.01) * 0.02 * falloff;
             vel[i] += (dx / dist) * ripple;
             vel[i + 1] += (dy / dist) * ripple;
@@ -173,17 +196,14 @@ function ParticleSphere({ color }: { color: string }) {
         }
       }
 
-      // Spring back
       vel[i] += (ox - px) * 0.08;
       vel[i + 1] += (oy - py) * 0.08;
       vel[i + 2] += (oz - pz) * 0.08;
 
-      // Damping
       vel[i] *= 0.82;
       vel[i + 1] *= 0.82;
       vel[i + 2] *= 0.82;
 
-      // Apply
       pos[i] += vel[i];
       pos[i + 1] += vel[i + 1];
       pos[i + 2] += vel[i + 2];
