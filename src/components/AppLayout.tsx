@@ -1,5 +1,6 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { CyberGlobe } from "@/components/CyberGlobe";
 import { useMode } from "@/contexts/ModeContext";
 import { Zap } from "lucide-react";
 
@@ -8,10 +9,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full relative">
+        <CyberGlobe />
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center justify-between border-b border-border px-4">
+        <div className="flex-1 flex flex-col min-w-0 relative z-10">
+          <header className="h-12 flex items-center justify-between border-b border-border/50 px-4 backdrop-blur-sm bg-background/60">
             <div className="flex items-center gap-3">
               <SidebarTrigger />
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
