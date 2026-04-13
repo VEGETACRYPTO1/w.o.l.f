@@ -1,33 +1,32 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, Bot, User, Loader2 } from "lucide-react";
+import { Send, Bot, User, Loader2, Swords, Leaf } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
-const modeGreetings: Record<string, string> = {
-  war: "W.O.L.F active. State your objective.",
-  rebuild: "W.O.L.F active. Let's assess and plan strategically.",
-  expansion: "W.O.L.F active. Let's explore new possibilities.",
-};
+const MODE_SELECTION_MSG = "Choose your mode:";
 
 export default function Chat() {
-  const { mode, config } = useMode();
-  const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: modeGreetings[mode] },
-  ]);
+  const { mode, setMode, config } = useMode();
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isFirstMessage, setIsFirstMessage] = useState(true);
+  const [awaitingModeSelection, setAwaitingModeSelection] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    setMessages([{ role: "assistant", content: modeGreetings[mode] }]);
-  }, [mode]);
+  const selectMode = (selectedMode: "war" | "relax") => {
+    setMode(selectedMode);
+    setAwaitingModeSelection(false);
+    const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
+    setMessages((prev) => [...prev, { role: "assistant", content: label }]);
+  };
 
   const send = async () => {
     if (!input.trim() || isLoading) return;
@@ -35,8 +34,33 @@ export default function Chat() {
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
-    setIsLoading(true);
 
+    // First message → show mode selection
+    if (isFirstMessage) {
+      setIsFirstMessage(false);
+      setAwaitingModeSelection(true);
+      setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
+      return;
+    }
+
+    // Awaiting mode selection → check for war/relax keyword
+    if (awaitingModeSelection) {
+      const lower = input.trim().toLowerCase();
+      if (lower.includes("war")) {
+        selectMode("war");
+        return;
+      }
+      if (lower.includes("relax")) {
+        selectMode("relax");
+        return;
+      }
+      // Invalid selection
+      setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "War" or "Relax" to choose your mode.' }]);
+      return;
+    }
+
+    // Normal AI flow
+    setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
       assistantSoFar += chunk;
@@ -50,7 +74,7 @@ export default function Chat() {
     };
 
     await streamWolfChat({
-      messages: newMessages.filter((m) => m.content !== modeGreetings[mode]),
+      messages: newMessages.filter((m) => m.content !== MODE_SELECTION_MSG && !m.content.startsWith("⚔️ War Mode activated") && !m.content.startsWith("🧘 Relax Mode activated") && m.content !== 'Please reply with "War" or "Relax" to choose your mode.'),
       mode,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
@@ -69,6 +93,11 @@ export default function Chat() {
       </div>
 
       <div className="flex-1 overflow-auto space-y-4 pb-4">
+        {messages.length === 0 && (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm opacity-60">
+            Send a message to begin.
+          </div>
+        )}
         {messages.map((msg, i) => (
           <motion.div
             key={i}
@@ -101,6 +130,39 @@ export default function Chat() {
             )}
           </motion.div>
         ))}
+
+        {/* Mode selection buttons */}
+        {awaitingModeSelection && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 pl-10">
+            <button
+              onClick={() => selectMode("war")}
+              className="flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-bold transition-all hover:scale-105 border"
+              style={{
+                background: "rgba(220, 38, 38, 0.15)",
+                borderColor: "rgba(220, 38, 38, 0.4)",
+                color: "#ef4444",
+                boxShadow: "0 0 20px rgba(220, 38, 38, 0.2)",
+              }}
+            >
+              <Swords className="h-4 w-4" />
+              War Mode
+            </button>
+            <button
+              onClick={() => selectMode("relax")}
+              className="flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-bold transition-all hover:scale-105 border"
+              style={{
+                background: "rgba(34, 197, 94, 0.15)",
+                borderColor: "rgba(34, 197, 94, 0.4)",
+                color: "#22c55e",
+                boxShadow: "0 0 20px rgba(34, 197, 94, 0.2)",
+              }}
+            >
+              <Leaf className="h-4 w-4" />
+              Relax Mode
+            </button>
+          </motion.div>
+        )}
+
         {isLoading && messages[messages.length - 1]?.role === "user" && (
           <div className="flex gap-3">
             <div className="h-7 w-7 rounded-md bg-primary/15 flex items-center justify-center shrink-0">
