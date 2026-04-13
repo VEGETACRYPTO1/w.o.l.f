@@ -74,7 +74,7 @@ export default function Dashboard() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-card rounded-lg border border-border p-5"
+          className="lg:col-span-2 glass-card rounded-lg border border-border p-5"
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-heading font-semibold text-lg">Today's Ops</h2>
@@ -126,7 +126,7 @@ export default function Dashboard() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="bg-card rounded-lg border border-border p-5"
+          className="glass-card rounded-lg border border-border p-5"
         >
           <h2 className="font-heading font-semibold text-lg mb-4 flex items-center gap-2">
             <Shield className="h-4 w-4 text-primary" />
