@@ -10,12 +10,9 @@ const modeColors: Record<string, string> = {
   expansion: "#40b870",
 };
 
-// ── Audio Analyzer Context ──
+// ── Audio Reactivity ──
 interface AudioData {
-  avg: number;
-  bass: number;
-  mid: number;
-  high: number;
+  avg: number; bass: number; mid: number; high: number;
   dataArray: Uint8Array;
 }
 
@@ -35,15 +32,12 @@ function useAudioReactivity() {
       const ctx = new AudioContext();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
-      const source = ctx.createMediaStreamSource(stream);
-      source.connect(analyser);
+      ctx.createMediaStreamSource(stream).connect(analyser);
       analyserRef.current = analyser;
       streamRef.current = stream;
       ctxRef.current = ctx;
       activeRef.current = true;
-    } catch {
-      // Permission denied – run without audio
-    }
+    } catch { /* no mic */ }
   }, []);
 
   useEffect(() => {
@@ -68,390 +62,83 @@ function useAudioReactivity() {
     };
   }, []);
 
-  return { audioData, startAudio: start, active: activeRef.current };
+  return { audioData, startAudio: start };
 }
 
-// ── Mouse tracker ──
 function useMousePosition() {
   const mouse = useRef({ x: 0, y: 0 });
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const h = (e: MouseEvent) => {
       mouse.current.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.current.y = -(e.clientY / window.innerHeight) * 2 + 1;
     };
-    window.addEventListener("mousemove", handler);
-    return () => window.removeEventListener("mousemove", handler);
+    window.addEventListener("mousemove", h);
+    return () => window.removeEventListener("mousemove", h);
   }, []);
   return mouse;
 }
 
-// ── Click pulse ──
 function useClickPulse() {
   const pulse = useRef(0);
   useEffect(() => {
-    const handler = () => { pulse.current = 1; };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
+    const h = () => { pulse.current = 1; };
+    window.addEventListener("mousedown", h);
+    return () => window.removeEventListener("mousedown", h);
   }, []);
   return pulse;
 }
 
-// ── Particle Brain Sphere ──
-function ParticleBrain({ color, audioData, mouse, clickPulse }: {
+// ── Dense Particle Sphere (the BRAIN — thousands of particles) ──
+function DenseParticleSphere({ color, audioData, mouse, clickPulse }: {
   color: string; audioData: AudioData;
   mouse: React.MutableRefObject<{ x: number; y: number }>;
   clickPulse: React.MutableRefObject<number>;
 }) {
-  const pointsRef = useRef<THREE.Points>(null);
-  const count = 2000;
+  const ref = useRef<THREE.Points>(null);
+  const count = 3000;
   const radius = 2;
 
-  const [basePositions, positions] = useMemo(() => {
-    const base = new Float32Array(count * 3);
+  const basePositions = useMemo(() => {
     const pos = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const r = radius;
-      base[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      base[i * 3 + 1] = r * Math.cos(phi);
-      base[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3] = base[i * 3];
-      pos[i * 3 + 1] = base[i * 3 + 1];
-      pos[i * 3 + 2] = base[i * 3 + 2];
+      // Distribute some particles inside the sphere for density
+      const r = radius * (0.7 + Math.random() * 0.3);
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.cos(phi);
+      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
     }
-    return [base, pos];
+    return pos;
   }, []);
 
-  // Connection lines between nearby particles
-  const connectionLines = useMemo(() => {
-    const lines: [number, number, number][][] = [];
-    const maxDist = 0.7;
-    const maxLines = 120;
-    let lineCount = 0;
-    for (let i = 0; i < count && lineCount < maxLines; i += 3) {
-      for (let j = i + 3; j < count && lineCount < maxLines; j += 5) {
-        const dx = basePositions[i * 3] - basePositions[j * 3];
-        const dy = basePositions[i * 3 + 1] - basePositions[j * 3 + 1];
-        const dz = basePositions[i * 3 + 2] - basePositions[j * 3 + 2];
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < maxDist) {
-          lines.push([
-            [basePositions[i * 3], basePositions[i * 3 + 1], basePositions[i * 3 + 2]],
-            [basePositions[j * 3], basePositions[j * 3 + 1], basePositions[j * 3 + 2]],
-          ]);
-          lineCount++;
-        }
-      }
-    }
-    return lines;
-  }, [basePositions]);
+  const positions = useMemo(() => new Float32Array(basePositions), [basePositions]);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
+    clickPulse.current *= 0.93;
     const audioScale = 1 + audioData.avg * 0.002;
-    const clickScale = 1 + clickPulse.current * 0.15;
+    const clickScale = 1 + clickPulse.current * 0.12;
 
-    // Decay click pulse
-    clickPulse.current *= 0.92;
+    if (ref.current) {
+      ref.current.rotation.y = t * 0.05 + mouse.current.x * 0.3;
+      ref.current.rotation.x = mouse.current.y * 0.15 + Math.sin(t * 0.3) * 0.04;
+      ref.current.scale.setScalar(audioScale * clickScale);
 
-    if (pointsRef.current) {
-      // Mouse tilt
-      pointsRef.current.rotation.y = t * 0.05 + mouse.current.x * 0.3;
-      pointsRef.current.rotation.x = mouse.current.y * 0.2 + Math.sin(t * 0.3) * 0.05;
-
-      // Audio + click scale
-      const s = audioScale * clickScale;
-      pointsRef.current.scale.setScalar(s);
-
-      // Vibrate particles with audio
-      const geo = pointsRef.current.geometry;
-      const posAttr = geo.getAttribute("position") as THREE.BufferAttribute;
+      // Subtle particle vibration
+      const posAttr = ref.current.geometry.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < count; i++) {
-        const freqIndex = i % audioData.dataArray.length;
-        const freq = audioData.dataArray[freqIndex] / 255;
-        const vibrate = freq * 0.08;
+        const fi = i % audioData.dataArray.length;
+        const freq = audioData.dataArray[fi] / 255;
+        const v = freq * 0.05;
         posAttr.setXYZ(
           i,
-          basePositions[i * 3] + (Math.sin(t * 3 + i) * 0.01 + vibrate * Math.sin(t * 5 + i * 0.5)),
-          basePositions[i * 3 + 1] + (Math.cos(t * 2.5 + i) * 0.01 + vibrate * Math.cos(t * 4 + i * 0.3)),
-          basePositions[i * 3 + 2] + (Math.sin(t * 2 + i * 0.7) * 0.01 + vibrate * Math.sin(t * 6 + i * 0.2))
+          basePositions[i * 3] + Math.sin(t * 2 + i * 0.3) * 0.008 + v * Math.sin(t * 5 + i),
+          basePositions[i * 3 + 1] + Math.cos(t * 1.8 + i * 0.2) * 0.008 + v * Math.cos(t * 4 + i),
+          basePositions[i * 3 + 2] + Math.sin(t * 1.5 + i * 0.5) * 0.008 + v * Math.sin(t * 6 + i)
         );
       }
       posAttr.needsUpdate = true;
-    }
-  });
-
-  return (
-    <group>
-      <Points ref={pointsRef} positions={positions} stride={3}>
-        <PointMaterial
-          transparent
-          color={color}
-          size={0.025}
-          sizeAttenuation
-          depthWrite={false}
-          opacity={0.9}
-          blending={THREE.AdditiveBlending}
-        />
-      </Points>
-      {/* Faint connection lines */}
-      <group>
-        {connectionLines.map((pts, i) => (
-          <Line
-            key={i}
-            points={pts}
-            color={color}
-            lineWidth={0.3}
-            transparent
-            opacity={0.08}
-          />
-        ))}
-      </group>
-    </group>
-  );
-}
-
-// ── Energy Core (Heart) ──
-function EnergyCore({ color, audioData, clickPulse }: {
-  color: string; audioData: AudioData;
-  clickPulse: React.MutableRefObject<number>;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshBasicMaterial>(null);
-  const glowMatRef = useRef<THREE.MeshBasicMaterial>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    const bassPulse = 1 + audioData.bass * 0.003;
-    const clickScale = 1 + clickPulse.current * 0.3;
-    const pulse = Math.sin(t * 2) * 0.08 + 1;
-    const s = pulse * bassPulse * clickScale;
-
-    if (meshRef.current) {
-      meshRef.current.scale.setScalar(s * 0.5);
-      meshRef.current.rotation.y = t * 0.3;
-    }
-    if (glowRef.current) {
-      glowRef.current.scale.setScalar(s * 0.8);
-    }
-    if (matRef.current) {
-      matRef.current.opacity = 0.6 + audioData.bass * 0.003 + clickPulse.current * 0.2;
-    }
-    if (glowMatRef.current) {
-      glowMatRef.current.opacity = 0.15 + audioData.bass * 0.002 + Math.sin(t * 3) * 0.05;
-    }
-  });
-
-  return (
-    <group>
-      {/* Inner bright core */}
-      <mesh ref={meshRef}>
-        <sphereGeometry args={[0.8, 32, 32]} />
-        <meshBasicMaterial
-          ref={matRef}
-          color={color}
-          transparent
-          opacity={0.7}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      {/* Outer glow sphere */}
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[1.2, 24, 24]} />
-        <meshBasicMaterial
-          ref={glowMatRef}
-          color={color}
-          transparent
-          opacity={0.15}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-    </group>
-  );
-}
-
-// ── Orbital Rings ──
-function OrbitalRing({ color, radius, speed, tilt, audioData }: {
-  color: string; radius: number; speed: number; tilt: number;
-  audioData: AudioData;
-}) {
-  const ref = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshBasicMaterial>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (ref.current) {
-      ref.current.rotation.z = tilt;
-      ref.current.rotation.y = t * speed;
-      ref.current.rotation.x = Math.sin(t * 0.5 + tilt) * 0.1;
-      const audioScale = 1 + audioData.mid * 0.001;
-      ref.current.scale.setScalar(audioScale);
-    }
-    if (matRef.current) {
-      matRef.current.opacity = 0.15 + Math.sin(t * 1.5 + tilt * 2) * 0.1 + audioData.mid * 0.001;
-    }
-  });
-
-  return (
-    <mesh ref={ref}>
-      <torusGeometry args={[radius, 0.006, 8, 128]} />
-      <meshBasicMaterial
-        ref={matRef}
-        color={color}
-        transparent
-        opacity={0.2}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  );
-}
-
-// ── Electric Bolts ──
-function generateBolt(radius: number): [number, number, number][] {
-  const theta1 = Math.random() * Math.PI * 2;
-  const phi1 = Math.acos(2 * Math.random() - 1);
-  const theta2 = theta1 + (Math.random() - 0.5) * 2.5;
-  const phi2 = phi1 + (Math.random() - 0.5) * 1.5;
-  const p1 = new THREE.Vector3(
-    radius * Math.sin(phi1) * Math.cos(theta1),
-    radius * Math.cos(phi1),
-    radius * Math.sin(phi1) * Math.sin(theta1)
-  );
-  const p2 = new THREE.Vector3(
-    radius * Math.sin(phi2) * Math.cos(theta2),
-    radius * Math.cos(phi2),
-    radius * Math.sin(phi2) * Math.sin(theta2)
-  );
-  const segments = 14 + Math.floor(Math.random() * 10);
-  const points: [number, number, number][] = [];
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const pos = new THREE.Vector3().lerpVectors(p1, p2, t).normalize().multiplyScalar(radius);
-    const arcLift = Math.sin(t * Math.PI) * 0.12;
-    pos.multiplyScalar(1 + arcLift);
-    if (i > 0 && i < segments) {
-      pos.x += (Math.random() - 0.5) * 0.1;
-      pos.y += (Math.random() - 0.5) * 0.1;
-      pos.z += (Math.random() - 0.5) * 0.1;
-    }
-    points.push([pos.x, pos.y, pos.z]);
-  }
-  return points;
-}
-
-interface BoltData { id: number; points: [number, number, number][]; opacity: number; birth: number; }
-let boltIdCounter = 0;
-
-function ElectricBolts({ audioData }: { audioData: AudioData }) {
-  const boltColor = "#FFD60A";
-  const [bolts, setBolts] = useState<BoltData[]>([]);
-  const nextSpawn = useRef(0);
-  const groupRef = useRef<THREE.Group>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (groupRef.current) {
-      groupRef.current.rotation.y = t * 0.08;
-      groupRef.current.rotation.x = Math.sin(t * 0.3) * 0.1;
-    }
-
-    // Faster spawning with more audio
-    const spawnRate = Math.max(0.05, 0.4 - audioData.avg * 0.002);
-    if (t > nextSpawn.current) {
-      const newBolt: BoltData = {
-        id: boltIdCounter++,
-        points: generateBolt(2),
-        opacity: 1,
-        birth: t,
-      };
-      setBolts((prev) => [...prev.slice(-10), newBolt]);
-      nextSpawn.current = t + spawnRate + Math.random() * 0.3;
-    }
-
-    setBolts((prev) =>
-      prev
-        .map((b) => ({ ...b, opacity: Math.max(0, 1 - (t - b.birth) / 0.35) }))
-        .filter((b) => b.opacity > 0)
-    );
-  });
-
-  return (
-    <group ref={groupRef}>
-      {bolts.map((bolt) => (
-        <group key={bolt.id}>
-          <Line
-            points={bolt.points}
-            color={boltColor}
-            lineWidth={2.5}
-            transparent
-            opacity={bolt.opacity * 0.9}
-          />
-          <Line
-            points={bolt.points}
-            color="#FFEA00"
-            lineWidth={1}
-            transparent
-            opacity={bolt.opacity * 0.4}
-          />
-        </group>
-      ))}
-    </group>
-  );
-}
-
-// ── Scan Ring ──
-function ScanRing({ color, audioData }: { color: string; audioData: AudioData }) {
-  const ref = useRef<THREE.Mesh>(null);
-  const matRef = useRef<THREE.MeshBasicMaterial>(null);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (ref.current) {
-      ref.current.position.y = Math.sin(t * 0.5) * 2;
-      ref.current.rotation.x = Math.PI / 2;
-      const scale = 1 - Math.abs(ref.current.position.y) / 3;
-      ref.current.scale.set(scale, scale, scale);
-    }
-    if (matRef.current) {
-      matRef.current.opacity = 0.3 + audioData.high * 0.002;
-    }
-  });
-
-  return (
-    <mesh ref={ref}>
-      <torusGeometry args={[2, 0.008, 8, 128]} />
-      <meshBasicMaterial
-        ref={matRef}
-        color={color}
-        transparent
-        opacity={0.4}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
-  );
-}
-
-// ── Background Atmosphere Particles ──
-function AtmosphereParticles({ color }: { color: string }) {
-  const ref = useRef<THREE.Points>(null);
-
-  const [positions] = useMemo(() => {
-    const count = 500;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 16;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 12;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
-    }
-    return [pos];
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (ref.current) {
-      ref.current.rotation.y = clock.getElapsedTime() * 0.008;
-      ref.current.rotation.x = Math.sin(clock.getElapsedTime() * 0.15) * 0.02;
     }
   });
 
@@ -460,36 +147,71 @@ function AtmosphereParticles({ color }: { color: string }) {
       <PointMaterial
         transparent
         color={color}
-        size={0.012}
+        size={0.015}
         sizeAttenuation
         depthWrite={false}
-        opacity={0.2}
+        opacity={0.9}
         blending={THREE.AdditiveBlending}
       />
     </Points>
   );
 }
 
-// ── Camera Drift ──
-function CameraDrift({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: number }> }) {
-  const { camera } = useThree();
-  const basePos = useRef(new THREE.Vector3(0, 0, 5.5));
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    camera.position.x = basePos.current.x + Math.sin(t * 0.15) * 0.15 + mouse.current.x * 0.3;
-    camera.position.y = basePos.current.y + Math.cos(t * 0.12) * 0.1 + mouse.current.y * 0.2;
-    camera.position.z = basePos.current.z + Math.sin(t * 0.08) * 0.1;
-    camera.lookAt(0, 0, 0);
-  });
-
-  return null;
-}
-
-// ── Hex Grid Shell ──
-function HexGrid({ color }: { color: string }) {
+// ── Connection Lines (thin, subtle, glowing) ──
+function ConnectionNetwork({ color }: { color: string }) {
   const ref = useRef<THREE.Group>(null);
 
+  const lines = useMemo(() => {
+    const result: [number, number, number][][] = [];
+    const nodeCount = 200;
+    const nodes: THREE.Vector3[] = [];
+    const radius = 2;
+
+    for (let i = 0; i < nodeCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = radius * (0.75 + Math.random() * 0.25);
+      nodes.push(new THREE.Vector3(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.sin(theta)
+      ));
+    }
+
+    const maxDist = 0.55;
+    let lineCount = 0;
+    for (let i = 0; i < nodeCount && lineCount < 150; i++) {
+      for (let j = i + 1; j < nodeCount && lineCount < 150; j++) {
+        if (nodes[i].distanceTo(nodes[j]) < maxDist) {
+          result.push([
+            [nodes[i].x, nodes[i].y, nodes[i].z],
+            [nodes[j].x, nodes[j].y, nodes[j].z],
+          ]);
+          lineCount++;
+        }
+      }
+    }
+    return result;
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.rotation.y = clock.getElapsedTime() * 0.05;
+    }
+  });
+
+  return (
+    <group ref={ref}>
+      {lines.map((pts, i) => (
+        <Line key={i} points={pts} color={color} lineWidth={0.3} transparent opacity={0.06} />
+      ))}
+    </group>
+  );
+}
+
+// ── Holographic Hex Grid Shell ──
+function HexGrid({ color }: { color: string }) {
+  const ref = useRef<THREE.Group>(null);
   const hexLines = useMemo(() => {
     const lines: [number, number, number][][] = [];
     const r = 2;
@@ -521,16 +243,227 @@ function HexGrid({ color }: { color: string }) {
     if (ref.current) {
       ref.current.rotation.y = t * 0.04;
       ref.current.rotation.x = Math.sin(t * 0.25) * 0.06;
+      ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.02);
     }
   });
 
   return (
     <group ref={ref}>
       {hexLines.map((pts, i) => (
-        <Line key={i} points={pts} color={color} lineWidth={0.4} transparent opacity={0.06} />
+        <Line key={i} points={pts} color={color} lineWidth={0.4} transparent opacity={0.08} />
       ))}
     </group>
   );
+}
+
+// ── Wireframe Shell ──
+function GlobeShell({ color }: { color: string }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ref.current) {
+      ref.current.rotation.y = t * 0.06;
+      ref.current.rotation.x = Math.sin(t * 0.3) * 0.08;
+      ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.02);
+    }
+  });
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[2, 36, 28]} />
+      <meshBasicMaterial color={color} wireframe transparent opacity={0.1} blending={THREE.AdditiveBlending} />
+    </mesh>
+  );
+}
+
+// ── Surface Data Nodes ──
+function DataNodes({ color }: { color: string }) {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const count = 300;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 2.02;
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.cos(phi);
+      pos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    return pos;
+  }, []);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ref.current) {
+      ref.current.rotation.y = t * 0.06;
+      ref.current.rotation.x = Math.sin(t * 0.3) * 0.08;
+      ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.02);
+    }
+  });
+
+  return (
+    <Points ref={ref} positions={positions} stride={3}>
+      <PointMaterial
+        transparent color={color} size={0.03} sizeAttenuation
+        depthWrite={false} opacity={0.85} blending={THREE.AdditiveBlending}
+      />
+    </Points>
+  );
+}
+
+// ── Orbital Rings (light, glowing) ──
+function OrbitalRing({ color, radius, speed, tilt, audioData }: {
+  color: string; radius: number; speed: number; tilt: number; audioData: AudioData;
+}) {
+  const ref = useRef<THREE.Mesh>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (ref.current) {
+      ref.current.rotation.z = tilt;
+      ref.current.rotation.y = t * speed;
+      ref.current.scale.setScalar(1 + audioData.mid * 0.001);
+    }
+    if (matRef.current) {
+      matRef.current.opacity = 0.15 + Math.sin(t * 1.5 + tilt * 2) * 0.08 + audioData.mid * 0.001;
+    }
+  });
+  return (
+    <mesh ref={ref}>
+      <torusGeometry args={[radius, 0.004, 8, 128]} />
+      <meshBasicMaterial ref={matRef} color={color} transparent opacity={0.2} blending={THREE.AdditiveBlending} />
+    </mesh>
+  );
+}
+
+// ── Electric Bolts (gold) ──
+function generateBolt(radius: number): [number, number, number][] {
+  const theta1 = Math.random() * Math.PI * 2;
+  const phi1 = Math.acos(2 * Math.random() - 1);
+  const theta2 = theta1 + (Math.random() - 0.5) * 2.5;
+  const phi2 = phi1 + (Math.random() - 0.5) * 1.5;
+  const p1 = new THREE.Vector3(radius * Math.sin(phi1) * Math.cos(theta1), radius * Math.cos(phi1), radius * Math.sin(phi1) * Math.sin(theta1));
+  const p2 = new THREE.Vector3(radius * Math.sin(phi2) * Math.cos(theta2), radius * Math.cos(phi2), radius * Math.sin(phi2) * Math.sin(theta2));
+  const segments = 14 + Math.floor(Math.random() * 10);
+  const points: [number, number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const pos = new THREE.Vector3().lerpVectors(p1, p2, t).normalize().multiplyScalar(radius);
+    pos.multiplyScalar(1 + Math.sin(t * Math.PI) * 0.12);
+    if (i > 0 && i < segments) {
+      pos.x += (Math.random() - 0.5) * 0.1;
+      pos.y += (Math.random() - 0.5) * 0.1;
+      pos.z += (Math.random() - 0.5) * 0.1;
+    }
+    points.push([pos.x, pos.y, pos.z]);
+  }
+  return points;
+}
+
+interface BoltData { id: number; points: [number, number, number][]; opacity: number; birth: number; }
+let boltIdCounter = 0;
+
+function ElectricBolts({ audioData }: { audioData: AudioData }) {
+  const [bolts, setBolts] = useState<BoltData[]>([]);
+  const nextSpawn = useRef(0);
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    if (groupRef.current) {
+      groupRef.current.rotation.y = t * 0.06;
+      groupRef.current.rotation.x = Math.sin(t * 0.3) * 0.08;
+      groupRef.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.02);
+    }
+    const spawnRate = Math.max(0.08, 0.4 - audioData.avg * 0.002);
+    if (t > nextSpawn.current) {
+      setBolts(prev => [...prev.slice(-10), { id: boltIdCounter++, points: generateBolt(2), opacity: 1, birth: t }]);
+      nextSpawn.current = t + spawnRate + Math.random() * 0.4;
+    }
+    setBolts(prev => prev.map(b => ({ ...b, opacity: Math.max(0, 1 - (t - b.birth) / 0.35) })).filter(b => b.opacity > 0));
+  });
+
+  return (
+    <group ref={groupRef}>
+      {bolts.map(bolt => (
+        <group key={bolt.id}>
+          <Line points={bolt.points} color="#FFD60A" lineWidth={2} transparent opacity={bolt.opacity * 0.9} />
+          <Line points={bolt.points} color="#FFEA00" lineWidth={0.8} transparent opacity={bolt.opacity * 0.35} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+// ── Particle Cloud (atmosphere) ──
+function ParticleCloud({ color }: { color: string }) {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const count = 600;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 2 + (Math.random() - 0.5) * 1.4;
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
+    }
+    return pos;
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.rotation.y = clock.getElapsedTime() * 0.02;
+      ref.current.scale.setScalar(1 + Math.sin(clock.getElapsedTime() * 0.8) * 0.02);
+    }
+  });
+
+  return (
+    <Points ref={ref} positions={positions} stride={3}>
+      <PointMaterial transparent color={color} size={0.01} sizeAttenuation depthWrite={false} opacity={0.4} blending={THREE.AdditiveBlending} />
+    </Points>
+  );
+}
+
+// ── Floating Stars ──
+function FloatingStars({ color }: { color: string }) {
+  const ref = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const count = 250;
+    const pos = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 14;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 8;
+    }
+    return pos;
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (ref.current) {
+      ref.current.rotation.y = clock.getElapsedTime() * 0.006;
+    }
+  });
+
+  return (
+    <Points ref={ref} positions={positions} stride={3}>
+      <PointMaterial transparent color={color} size={0.012} sizeAttenuation depthWrite={false} opacity={0.15} blending={THREE.AdditiveBlending} />
+    </Points>
+  );
+}
+
+// ── Camera Drift ──
+function CameraDrift({ mouse }: { mouse: React.MutableRefObject<{ x: number; y: number }> }) {
+  const { camera } = useThree();
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    camera.position.x = Math.sin(t * 0.12) * 0.12 + mouse.current.x * 0.25;
+    camera.position.y = Math.cos(t * 0.1) * 0.08 + mouse.current.y * 0.15;
+    camera.position.z = 5.5 + Math.sin(t * 0.08) * 0.08;
+    camera.lookAt(0, 0, 0);
+  });
+  return null;
 }
 
 // ── Main Scene ──
@@ -539,43 +472,40 @@ function Scene({ color }: { color: string }) {
   const mouse = useMousePosition();
   const clickPulse = useClickPulse();
 
-  // Try to start audio on first interaction
   useEffect(() => {
-    const handler = () => { startAudio(); window.removeEventListener("click", handler); };
-    window.addEventListener("click", handler);
-    return () => window.removeEventListener("click", handler);
+    const h = () => { startAudio(); window.removeEventListener("click", h); };
+    window.addEventListener("click", h);
+    return () => window.removeEventListener("click", h);
   }, [startAudio]);
 
-  // Typing reactivity
   useEffect(() => {
-    const handler = () => { clickPulse.current = Math.min(clickPulse.current + 0.15, 0.5); };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const h = () => { clickPulse.current = Math.min(clickPulse.current + 0.15, 0.5); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
   }, [clickPulse]);
 
   return (
     <>
       <CameraDrift mouse={mouse} />
-      <fog attach="fog" args={["#000000", 5, 15]} />
 
-      {/* Core systems */}
-      <EnergyCore color={color} audioData={audioData} clickPulse={clickPulse} />
-      <ParticleBrain color={color} audioData={audioData} mouse={mouse} clickPulse={clickPulse} />
+      {/* Dense particle sphere — the core structure */}
+      <DenseParticleSphere color={color} audioData={audioData} mouse={mouse} clickPulse={clickPulse} />
+      <ConnectionNetwork color={color} />
       <HexGrid color={color} />
+      <GlobeShell color={color} />
+      <DataNodes color={color} />
 
-      {/* Electric current */}
-      <ScanRing color="#FFD60A" audioData={audioData} />
+      {/* Electric energy */}
       <ElectricBolts audioData={audioData} />
 
-      {/* Orbital rings */}
-      <OrbitalRing color={color} radius={2.6} speed={0.15} tilt={0.3} audioData={audioData} />
-      <OrbitalRing color={color} radius={3.0} speed={-0.1} tilt={-0.6} audioData={audioData} />
-      <OrbitalRing color={color} radius={3.4} speed={0.08} tilt={1.1} audioData={audioData} />
-      <OrbitalRing color={color} radius={2.3} speed={-0.18} tilt={0.8} audioData={audioData} />
-      <OrbitalRing color={color} radius={3.8} speed={0.05} tilt={-0.2} audioData={audioData} />
+      {/* Orbital rings — light, not dominant */}
+      <OrbitalRing color={color} radius={2.8} speed={0.12} tilt={0.3} audioData={audioData} />
+      <OrbitalRing color={color} radius={3.2} speed={-0.08} tilt={-0.5} audioData={audioData} />
+      <OrbitalRing color={color} radius={2.5} speed={0.15} tilt={1.2} audioData={audioData} />
 
       {/* Atmosphere */}
-      <AtmosphereParticles color={color} />
+      <ParticleCloud color={color} />
+      <FloatingStars color={color} />
     </>
   );
 }
@@ -598,17 +528,18 @@ export function CyberGlobe() {
       {/* Radial vignette */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(ellipse at center, transparent 15%, hsl(var(--background)) 70%)`,
-        }}
+        style={{ background: `radial-gradient(ellipse at center, transparent 20%, hsl(var(--background)) 75%)` }}
       />
-      {/* Subtle fog overlay */}
+      {/* Soft inner glow instead of solid core */}
       <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.03) 0%, transparent 50%)`,
-        }}
-      />
+        className="absolute inset-0 pointer-events-none flex items-center justify-center"
+      >
+        <div style={{
+          width: "280px", height: "280px", borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(255,59,59,0.12) 0%, rgba(255,59,59,0.04) 40%, transparent 70%)",
+          filter: "blur(20px)",
+        }} />
+      </div>
     </div>
   );
 }
