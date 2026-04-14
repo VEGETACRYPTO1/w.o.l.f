@@ -3,6 +3,9 @@
 // ==========================
 
 export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
+export type AppMode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
+
+let modeSwitchCallback: ((mode: AppMode) => void) | null = null;
 
 let voices: SpeechSynthesisVoice[] = [];
 let voiceReady = false;
