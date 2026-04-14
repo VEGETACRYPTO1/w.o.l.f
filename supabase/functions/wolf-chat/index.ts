@@ -105,14 +105,57 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    // Detect real-world data queries from the latest user message
+    const lastUserMsg = messages.filter((m: any) => m.role === "user").pop()?.content?.toLowerCase() || "";
+    let externalData = "";
+
+    if (/news|world|happening|headlines/.test(lastUserMsg)) {
+      const NEWS_API_KEY = Deno.env.get("NEWS_API_KEY");
+      if (NEWS_API_KEY) {
+        try {
+          const newsRes = await fetch(
+            `https://newsapi.org/v2/top-headlines?category=general&pageSize=5&apiKey=${NEWS_API_KEY}`
+          );
+          const newsData = await newsRes.json();
+          if (newsData.articles?.length) {
+            externalData += "Latest News:\n";
+            newsData.articles.forEach((a: any, i: number) => {
+              externalData += `${i + 1}. ${a.title}\n`;
+            });
+          }
+        } catch (e) {
+          console.error("News fetch error:", e);
+        }
+      }
+    }
+
+    if (/weather|temperature|forecast/.test(lastUserMsg)) {
+      const WEATHER_API_KEY = Deno.env.get("WEATHER_API_KEY");
+      if (WEATHER_API_KEY) {
+        try {
+          const city = "Dubai"; // default city
+          const weatherRes = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
+          );
+          const weatherData = await weatherRes.json();
+          if (weatherData.main) {
+            externalData += `\nWeather in ${city}: ${weatherData.weather?.[0]?.description || "N/A"}, ${weatherData.main.temp}°C\n`;
+          }
+        } catch (e) {
+          console.error("Weather fetch error:", e);
+        }
+      }
+    }
+
     const systemPrompt = modeSystemPrompts[mode] || modeSystemPrompts.war;
 
-    // Build memory context string
     const memoryContext = memory
       ? `\n\nUser's stored memory:\nGoals: ${JSON.stringify(memory.goals || [])}\nTasks: ${JSON.stringify(memory.tasks || [])}\nHabits: ${JSON.stringify(memory.habits || [])}`
       : "";
 
-    const fullSystem = systemPrompt + memoryContext;
+    const externalContext = externalData ? `\n\nReal-world data:\n${externalData}` : "";
+
+    const fullSystem = systemPrompt + memoryContext + externalContext;
 
     // First call: non-streaming to detect tool calls
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
