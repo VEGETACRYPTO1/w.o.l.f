@@ -1,13 +1,13 @@
 // ==========================
-// 🐺 W.O.L.F FULL VOICE SYSTEM
+// 🐺 W.O.L.F GLOBAL VOICE SYSTEM
 // ==========================
+
+export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
 
 let voices: SpeechSynthesisVoice[] = [];
 let voiceReady = false;
 let isSpeaking = false;
 let started = false;
-
-export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
 let currentVoiceMode: VoiceMode = "jarvis";
 
 // ==========================
@@ -28,15 +28,12 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
 }
 
 // ==========================
-// 🔓 AUDIO UNLOCK (REQUIRED)
-// First tap → unlocks mic + audio
+// 🔓 AUDIO UNLOCK
 // ==========================
 
 if (typeof window !== "undefined") {
   document.body?.addEventListener("click", () => {
-    try {
-      speechSynthesis.resume();
-    } catch (e) {}
+    try { speechSynthesis.resume(); } catch (e) {}
     if (!started) {
       _autoStartListening();
       started = true;
@@ -46,22 +43,22 @@ if (typeof window !== "undefined") {
 }
 
 // ==========================
-// 🔊 SPEAK FUNCTION
+// 🔊 GLOBAL wolfSpeak (ONLY speak function)
 // ==========================
 
-export async function speak(text: string): Promise<void> {
+function wolfSpeak(text: string): Promise<void> {
   const clean = text
     .replace(/[*_~`#>]/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/🌐|🐺|⚔️|🧠|🧘|🔧|🌱/g, "")
     .trim();
 
-  if (!clean) return;
+  if (!clean) return Promise.resolve();
 
   if (!voiceReady) {
     loadVoices();
     return new Promise((resolve) => {
-      setTimeout(() => { speak(clean).then(resolve); }, 200);
+      setTimeout(() => { wolfSpeak(clean).then(resolve); }, 200);
     });
   }
 
@@ -72,43 +69,42 @@ export async function speak(text: string): Promise<void> {
     return new Promise<void>((resolve) => {
       const utter = new SpeechSynthesisUtterance(clean);
       const voice =
-        voices.find((v) => v.name.includes("Google UK English Male")) ||
-        voices.find((v) => v.name.includes("Samantha")) ||
-        voices.find((v) => v.lang.includes("en")) ||
-        voices[0];
+        voices.find((v) => v.lang.includes("en")) || voices[0];
 
       if (voice) utter.voice = voice;
       utter.rate = 1.0;
       utter.pitch = 0.9;
       utter.volume = 1;
 
-      utter.onstart = () => console.log("🗣️ WOLF speaking...");
-      utter.onend = () => {
-        isSpeaking = false;
-        resolve();
-      };
-      utter.onerror = () => {
-        isSpeaking = false;
-        resolve();
-      };
+      utter.onend = () => { isSpeaking = false; resolve(); };
+      utter.onerror = () => { isSpeaking = false; resolve(); };
 
+      speechSynthesis.resume();
       speechSynthesis.speak(utter);
+      console.log("🐺 speaking:", clean.substring(0, 60));
     });
   } catch (err) {
-    console.log("Speech failed:", err);
+    console.log("voice error", err);
     isSpeaking = false;
+    return Promise.resolve();
   }
+}
+
+// Register globally
+if (typeof window !== "undefined") {
+  (window as any).wolfSpeak = wolfSpeak;
 }
 
 // ==========================
 // 🔊 PUBLIC API
 // ==========================
 
+export const speak = wolfSpeak;
 export function getIsSpeaking() { return isSpeaking; }
 export function stopSpeaking() { speechSynthesis.cancel(); isSpeaking = false; }
 export function getCurrentVoiceMode(): VoiceMode { return currentVoiceMode; }
-export function setVoiceMode(mode: VoiceMode) { currentVoiceMode = mode; speak(`Voice mode set to ${mode}`); }
-export function testVoice() { speak("W.O.L.F fully operational, SK."); }
+export function setVoiceMode(mode: VoiceMode) { currentVoiceMode = mode; wolfSpeak(`Voice mode set to ${mode}`); }
+export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
 
 // ==========================
 // 🐺 WAKE WORD
@@ -121,20 +117,18 @@ let commandCallback: ((text: string) => void) | null = null;
 function handleWakeWord(text: string): boolean {
   const lower = text.toLowerCase();
   const wakeWords = ["hey wolf", "hello wolf", "wake up wolf"];
-  const isWake = wakeWords.some((w) => lower.includes(w));
-  if (!isWake) return false;
+  if (!wakeWords.some((w) => lower.includes(w))) return false;
 
   wolfActive = true;
   wakeWordCallback?.();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  speak(`${greeting}, SK. W.O.L.F online. Awaiting your command.`).catch(() => {});
+  wolfSpeak(`${greeting}, SK. W.O.L.F online. Awaiting your command.`).catch(() => {});
   return true;
 }
 
 // ==========================
-// 🎤 AUTO LISTEN SYSTEM
-// Always listening after first tap
+// 🎤 AUTO LISTEN
 // ==========================
 
 let recognition: any = null;
@@ -145,9 +139,8 @@ export function isRecognitionSupported(): boolean {
 
 function _autoStartListening() {
   if (!isRecognitionSupported()) return;
-
-  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  recognition = new SpeechRecognition();
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+  recognition = new SR();
   recognition.continuous = true;
   recognition.interimResults = false;
   recognition.lang = "en-US";
@@ -156,54 +149,27 @@ function _autoStartListening() {
     const result = event.results[event.results.length - 1];
     const text = result[0].transcript.trim();
     console.log("🎤 Heard:", text);
-
     const handled = handleWakeWord(text);
     if (!handled && wolfActive && commandCallback) {
-      if (isSpeaking) {
-        speechSynthesis.cancel();
-        isSpeaking = false;
-      }
+      if (isSpeaking) { speechSynthesis.cancel(); isSpeaking = false; }
       commandCallback(text);
     }
   };
 
-  recognition.onend = () => {
-    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 500);
-  };
-
-  recognition.onerror = () => {
-    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 1000);
-  };
-
+  recognition.onend = () => { setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 500); };
+  recognition.onerror = () => { setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 1000); };
   recognition.start();
 }
-
-// ==========================
-// 🐺 HANDS-FREE API
-// ==========================
 
 export function startHandsFree(onWake: () => void, onCommand: (text: string) => void): boolean {
   if (!isRecognitionSupported()) return false;
   wakeWordCallback = onWake;
   commandCallback = onCommand;
-  // Auto-listen starts on first tap via the click handler
   return true;
 }
 
-export function stopHandsFree() {
-  wolfActive = false;
-  wakeWordCallback = null;
-  commandCallback = null;
-  if (recognition) {
-    try { recognition.stop(); } catch {}
-    recognition = null;
-  }
-}
-
+export function stopHandsFree() { wolfActive = false; wakeWordCallback = null; commandCallback = null; if (recognition) { try { recognition.stop(); } catch {} recognition = null; } }
 export function isWolfActive() { return wolfActive; }
 export function isListening(): boolean { return recognition !== null; }
 export function stopListening() { stopHandsFree(); }
-export function startListening(onResult: (text: string) => void): boolean {
-  commandCallback = onResult;
-  return true;
-}
+export function startListening(onResult: (text: string) => void): boolean { commandCallback = onResult; return true; }

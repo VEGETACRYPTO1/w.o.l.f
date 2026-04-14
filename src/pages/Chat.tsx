@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { ExternalLink } from "lucide-react";
-import { getCurrentVoiceMode, setVoiceMode, type VoiceMode } from "@/lib/wolfVoice";
+import { getCurrentVoiceMode, setVoiceMode, speak, type VoiceMode } from "@/lib/wolfVoice";
 
 function openTab(query: string) {
   const url = query.startsWith("http")
@@ -179,7 +179,12 @@ export default function Chat() {
       ),
       mode,
       onDelta: upsertAssistant,
-      onDone: () => setIsLoading(false),
+      onDone: () => {
+        setIsLoading(false);
+        if (assistantSoFar) {
+          setTimeout(() => (window as any).wolfSpeak?.(assistantSoFar) || speak(assistantSoFar), 50);
+        }
+      },
       onError: (err) => {
         setIsLoading(false);
         toast.error(err);
