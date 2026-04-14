@@ -97,8 +97,9 @@ function HitSphere({ onHit }: { onHit: (hovering: boolean, point: THREE.Vector3 
   );
 }
 
-// ── 4000-particle sphere with liquid raycast distortion ──
-function ParticleSphere({ color }: { color: string }) {
+type ModeColorSet = { highlight: string; mid: string; shadow: string };
+
+function ParticleSphere({ colors }: { colors: ModeColorSet }) {
   const ref = useRef<THREE.Points>(null);
   const matRef = useRef<THREE.PointsMaterial>(null);
   const count = 4000;
@@ -106,27 +107,37 @@ function ParticleSphere({ color }: { color: string }) {
   const originalPositions = useRef<Float32Array | null>(null);
   const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
 
-  const positions = useMemo(() => {
+  // Per-particle color variation
+  const { positions, colorArray, offsets } = useMemo(() => {
     const pos = new Float32Array(count * 3);
+    const col = new Float32Array(count * 3);
+    const offs = new Float32Array(count);
+    const cHighlight = new THREE.Color(colors.highlight);
+    const cMid = new THREE.Color(colors.mid);
+    const cShadow = new THREE.Color(colors.shadow);
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(Math.random() * 2 - 1);
       pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
       pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = radius * Math.cos(phi);
+      // Color distribution: 20% highlight, 60% mid, 20% shadow
+      const r = Math.random();
+      const c = r < 0.2 ? cHighlight : r < 0.8 ? cMid : cShadow;
+      col[i * 3] = c.r;
+      col[i * 3 + 1] = c.g;
+      col[i * 3 + 2] = c.b;
+      offs[i] = Math.random() * Math.PI * 2;
     }
     originalPositions.current = pos.slice();
-    return pos;
-  }, []);
+    return { positions: pos, colorArray: col, offsets: offs };
+  }, [colors.highlight, colors.mid, colors.shadow]);
 
-  // Reset sphere: snap all particles back to original positions
   const doReset = useCallback(() => {
     if (!ref.current || !originalPositions.current) return;
     const pos = (ref.current.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     const orig = originalPositions.current;
-    for (let i = 0; i < pos.length; i++) {
-      pos[i] = orig[i];
-    }
+    for (let i = 0; i < pos.length; i++) pos[i] = orig[i];
     ref.current.geometry.attributes.position.needsUpdate = true;
   }, []);
 
@@ -155,26 +166,15 @@ function ParticleSphere({ color }: { color: string }) {
     }
 
     for (let i = 0; i < pos.length; i += 3) {
-      const ox = orig[i];
-      const oy = orig[i + 1];
-      const oz = orig[i + 2];
-
-      // Always reset target to original
-      let nx = ox;
-      let ny = oy;
-      let nz = oz;
+      const ox = orig[i], oy = orig[i + 1], oz = orig[i + 2];
+      let nx = ox, ny = oy, nz = oz;
 
       if (hovering && localHit) {
         const dot = ox * localHit.x + oy * localHit.y + oz * localHit.z;
         if (dot > 0) {
-          const dx = ox - localHit.x;
-          const dy = oy - localHit.y;
-          const dz = oz - localHit.z;
+          const dx = ox - localHit.x, dy = oy - localHit.y, dz = oz - localHit.z;
           const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
-
-          const interactionRadius = 0.7;
-          const strength = 0.5;
-
+          const interactionRadius = 0.7, strength = 0.5;
           if (dist < interactionRadius) {
             const falloff = 1 - dist / interactionRadius;
             const force = falloff * strength;
@@ -185,7 +185,6 @@ function ParticleSphere({ color }: { color: string }) {
         }
       }
 
-      // Smooth interpolation — no drift
       pos[i] += (nx - pos[i]) * 0.15;
       pos[i + 1] += (ny - pos[i + 1]) * 0.15;
       pos[i + 2] += (nz - pos[i + 2]) * 0.15;
@@ -196,8 +195,9 @@ function ParticleSphere({ color }: { color: string }) {
     ref.current.rotation.x += 0.0005;
     ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
 
+    // Flicker: modulate per-particle opacity via overall material
     if (matRef.current) {
-      matRef.current.opacity = 0.7 + Math.sin(t * 0.5) * 0.2;
+      matRef.current.opacity = 0.65 + Math.sin(t * 0.7) * 0.12;
     }
   });
 
@@ -206,19 +206,15 @@ function ParticleSphere({ color }: { color: string }) {
       <HitSphere onHit={handleHit} />
       <points ref={ref}>
         <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            count={count}
-            array={positions}
-            itemSize={3}
-          />
+          <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
+          <bufferAttribute attach="attributes-color" count={count} array={colorArray} itemSize={3} />
         </bufferGeometry>
         <pointsMaterial
           ref={matRef}
-          color={color}
+          vertexColors
           size={0.015}
           transparent
-          opacity={0.9}
+          opacity={0.75}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           sizeAttenuation
