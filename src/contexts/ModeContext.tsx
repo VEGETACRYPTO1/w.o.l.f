@@ -60,11 +60,20 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute("data-mode", "intelligence");
   }, []);
 
-  const setMode = (newMode: Mode) => {
+  const setMode = useCallback((newMode: Mode) => {
     setModeState(newMode);
     localStorage.setItem("jarvis-mode", newMode);
     document.documentElement.setAttribute("data-mode", newMode);
-  };
+  }, []);
+
+  // Bridge voice system mode changes to React state
+  useEffect(() => {
+    onModeChange((voiceMode) => {
+      if (voiceMode === "intelligence" || voiceMode === "war" || voiceMode === "relax") {
+        setModeState(voiceMode);
+      }
+    });
+  }, []);
 
   return (
     <ModeContext.Provider value={{ mode, setMode, config: MODE_CONFIGS[mode] }}>
