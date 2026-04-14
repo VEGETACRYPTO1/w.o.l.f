@@ -8,12 +8,12 @@ import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { useEffect } from "react";
 
-const modeColors: Record<string, string> = {
-  intelligence: "#FFD36B",
-  war: "#FF3B3B",
-  rebuild: "#4090e0",
-  expansion: "#40b870",
-  relax: "#00ffcc",
+const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
+  intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
+  war: { highlight: "#FF3B3B", mid: "#CC2222", shadow: "#881111" },
+  rebuild: { highlight: "#4090e0", mid: "#3070b0", shadow: "#205080" },
+  expansion: { highlight: "#40b870", mid: "#309060", shadow: "#206040" },
+  relax: { highlight: "#00ffcc", mid: "#00cc99", shadow: "#008866" },
 };
 
 // Global reset trigger
