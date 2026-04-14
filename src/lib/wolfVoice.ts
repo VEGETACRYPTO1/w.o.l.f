@@ -7,6 +7,7 @@ export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
 let voices: SpeechSynthesisVoice[] = [];
 let voiceReady = false;
 let isSpeaking = false;
+let wolfAudioReady = false;
 let started = false;
 let currentVoiceMode: VoiceMode = "jarvis";
 
@@ -28,12 +29,24 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
 }
 
 // ==========================
-// 🔓 AUDIO UNLOCK
+// 🔓 GLOBAL AUDIO UNLOCK
 // ==========================
+
+function unlockWolfAudio() {
+  if (wolfAudioReady) return;
+  try {
+    const utter = new SpeechSynthesisUtterance(" ");
+    speechSynthesis.speak(utter);
+    speechSynthesis.cancel();
+    speechSynthesis.resume();
+    wolfAudioReady = true;
+    console.log("🔓 WOLF audio unlocked");
+  } catch (e) {}
+}
 
 if (typeof window !== "undefined") {
   document.body?.addEventListener("click", () => {
-    try { speechSynthesis.resume(); } catch (e) {}
+    unlockWolfAudio();
     if (!started) {
       _autoStartListening();
       started = true;
@@ -43,7 +56,7 @@ if (typeof window !== "undefined") {
 }
 
 // ==========================
-// 🔊 GLOBAL wolfSpeak (ONLY speak function)
+// 🔊 wolfSpeak — ONLY speak function
 // ==========================
 
 function wolfSpeak(text: string): Promise<void> {
@@ -69,7 +82,9 @@ function wolfSpeak(text: string): Promise<void> {
     return new Promise<void>((resolve) => {
       const utter = new SpeechSynthesisUtterance(clean);
       const voice =
-        voices.find((v) => v.lang.includes("en")) || voices[0];
+        voices.find((v) => v.name.includes("Google")) ||
+        voices.find((v) => v.lang.includes("en")) ||
+        voices[0];
 
       if (voice) utter.voice = voice;
       utter.rate = 1.0;
@@ -79,12 +94,13 @@ function wolfSpeak(text: string): Promise<void> {
       utter.onend = () => { isSpeaking = false; resolve(); };
       utter.onerror = () => { isSpeaking = false; resolve(); };
 
+      // 🔥 CRITICAL: resume before speak
       speechSynthesis.resume();
       speechSynthesis.speak(utter);
-      console.log("🐺 speaking:", clean.substring(0, 60));
+      console.log("🐺 WOLF speaking:", clean.substring(0, 60));
     });
   } catch (err) {
-    console.log("voice error", err);
+    console.log("❌ voice error:", err);
     isSpeaking = false;
     return Promise.resolve();
   }
