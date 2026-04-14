@@ -23,18 +23,26 @@ function openTab(query: string) {
 
 function ChatMessage({ content }: { content: string }) {
   // Detect clickable open links: 🌐 [Open: query](search:query)
-  const linkMatch = content.match(/🌐 \[Open: (.+?)\]\(search:(.+?)\)/);
-  if (linkMatch) {
-    const query = linkMatch[2];
-    return (
-      <button
-        onClick={() => openTab(query)}
-        className="flex items-center gap-2 text-primary hover:underline cursor-pointer text-left"
-      >
-        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-        🌐 Open: {query}
-      </button>
-    );
+ const linkMatch = content.match(/🌐 \[Open: (.+?)\]\(search:(.+?)\)/);
+
+if (linkMatch) {
+  const query = linkMatch[2];
+
+  // AUTO OPEN
+  setTimeout(() => {
+    openTab(query);
+  }, 300);
+
+  return (
+    <button
+      onClick={() => openTab(query)}
+      className="flex items-center gap-2 text-primary hover:underline cursor-pointer text-left"
+    >
+      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+      Open: {query}
+    </button>
+  );
+}
   }
   return <ReactMarkdown>{content}</ReactMarkdown>;
 }
