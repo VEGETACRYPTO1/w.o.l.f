@@ -116,7 +116,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, memory } = await req.json();
+    const { messages, mode, memory, location } = await req.json();
 
     if (!messages || !Array.isArray(messages)) {
       return new Response(JSON.stringify({ error: "messages array required" }), {

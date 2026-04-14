@@ -32,7 +32,7 @@ export async function streamWolfChat({
         "Content-Type": "application/json",
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ messages, mode, sessionId: SESSION_ID, memory }),
+      body: JSON.stringify({ messages, mode, sessionId: SESSION_ID, memory, location }),
     });
 
     if (!resp.ok) {
