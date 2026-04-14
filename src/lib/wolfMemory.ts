@@ -19,22 +19,24 @@ export function saveMemory(memory: WolfMemory) {
 }
 
 function openTab(query: string) {
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
   let url = "";
 
   if (q.includes("youtube")) {
-    const search = q.replace("open", "").replace("youtube", "").trim();
-    url = search
-      ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(search)
+    const clean = q.replace("open", "").replace("search", "").replace("youtube", "").trim();
+    url = clean
+      ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(clean)
       : "https://www.youtube.com";
-  } else if (q.includes("google") || q.includes("search")) {
-    const search = q.replace("search", "").replace("google", "").trim();
-    url = "https://www.google.com/search?q=" + encodeURIComponent(search);
   } else {
-    url = "https://www.google.com/search?q=" + encodeURIComponent(query);
+    const clean = q.replace("search", "").replace("google", "").replace("open", "").trim();
+    url = "https://www.google.com/search?q=" + encodeURIComponent(clean || query);
   }
 
-  window.open(url, "_blank");
+  const a = document.createElement("a");
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.click();
 }
 
 export function handleMemoryAction(

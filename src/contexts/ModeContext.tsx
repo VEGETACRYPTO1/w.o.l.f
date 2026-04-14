@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
-export type Mode = "war" | "rebuild" | "expansion" | "relax";
+export type Mode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
 
 interface ModeConfig {
   label: string;
@@ -10,6 +10,12 @@ interface ModeConfig {
 }
 
 export const MODE_CONFIGS: Record<Mode, ModeConfig> = {
+  intelligence: {
+    label: "Intelligence Mode",
+    description: "Cold data. Precise answers. No noise.",
+    icon: "🧠",
+    tone: "Factual, minimal, system-like. Data only.",
+  },
   war: {
     label: "War Mode",
     description: "Maximum intensity. No distractions. Execute.",
@@ -45,12 +51,12 @@ interface ModeContextType {
 const ModeContext = createContext<ModeContextType | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<Mode>("war");
+  const [mode, setModeState] = useState<Mode>("intelligence");
 
-  // On mount: wipe stored mode, default to war
+  // On mount: default to intelligence
   useEffect(() => {
     localStorage.removeItem("jarvis-mode");
-    document.documentElement.setAttribute("data-mode", "war");
+    document.documentElement.setAttribute("data-mode", "intelligence");
   }, []);
 
   const setMode = (newMode: Mode) => {
