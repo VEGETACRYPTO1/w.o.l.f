@@ -11,6 +11,7 @@ import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
   const [wolfPulse, setWolfPulse] = useState(false);
+  const [energyBurst, setEnergyBurst] = useState(false);
   const { mode, setMode } = useMode();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -22,10 +23,25 @@ export function ChatOverlay() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Geolocation on mount
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        (window as any).userLocation = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        };
+      },
+      () => { /* permission denied — fallback handled server-side */ }
+    );
+  }, []);
+
   const toggleChat = () => {
     setWolfPulse(true);
+    setEnergyBurst(true);
     setTimeout(() => setWolfPulse(false), 400);
-    setTimeout(() => setOpen((v) => !v), 100);
+    setTimeout(() => setEnergyBurst(false), 400);
+    setTimeout(() => setOpen((v) => !v), 120);
   };
 
   const handleWolfClick = () => {
@@ -69,9 +85,12 @@ export function ChatOverlay() {
 
     const modeLabels = ["🧠 Intelligence Mode active.", "⚔️ War Mode activated.", "🧘 Relax Mode activated.", "🔧 Rebuild Mode activated.", "🌱 Expansion Mode activated."];
 
+    const userLocation = (window as any).userLocation;
+
     await streamWolfChat({
       messages: newMessages.filter((m) => !modeLabels.includes(m.content)),
       mode,
+      location: userLocation || undefined,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
       onError: (err) => {
@@ -101,22 +120,37 @@ export function ChatOverlay() {
 
   return (
     <>
-      <button
-        onClick={toggleChat}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110"
-        style={{
-          background: "rgba(0,0,0,0.7)",
-          border: "1px solid hsl(var(--primary) / 0.4)",
-          boxShadow: open
-            ? "0 0 25px hsl(var(--primary) / 0.5)"
-            : "0 0 20px hsl(var(--primary) / 0.3)",
-          backdropFilter: "blur(10px)",
-          transition: "transform 0.2s ease, box-shadow 0.3s ease",
-          animation: wolfPulse ? "wolfPulse 0.4s ease" : "none",
-        }}
-      >
-        {open ? <X className="h-6 w-6 text-primary" /> : <span className="text-2xl">🐺</span>}
-      </button>
+      {/* Wolf button with energy burst */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {/* Energy burst ring */}
+        <div
+          style={{
+            position: "absolute",
+            inset: "-20px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, hsl(var(--glow-primary) / 0.35), transparent 70%)",
+            opacity: energyBurst ? 1 : 0,
+            transition: "opacity 0.3s ease",
+            pointerEvents: "none",
+          }}
+        />
+        <button
+          onClick={toggleChat}
+          className="relative h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110"
+          style={{
+            background: "rgba(0,0,0,0.7)",
+            border: "1px solid hsl(var(--primary) / 0.4)",
+            boxShadow: open
+              ? "0 0 25px hsl(var(--primary) / 0.5)"
+              : "0 0 20px hsl(var(--primary) / 0.3)",
+            backdropFilter: "blur(10px)",
+            transition: "transform 0.2s ease, box-shadow 0.3s ease",
+            animation: wolfPulse ? "wolfPulse 0.4s ease" : "none",
+          }}
+        >
+          {open ? <X className="h-6 w-6 text-primary" /> : <span className="text-2xl">🐺</span>}
+        </button>
+      </div>
 
       <div
         className="fixed z-50"
@@ -125,10 +159,11 @@ export function ChatOverlay() {
           right: "40px",
           width: "min(500px, calc(100vw - 80px))",
           opacity: open ? 1 : 0,
-          transform: open ? "translateY(0px) scale(1)" : "translateY(30px) scale(0.9)",
+          transform: open ? "translateY(0px) scale(1)" : "translateY(40px) scale(0.85)",
+          filter: open ? "blur(0px)" : "blur(6px)",
           transformOrigin: "bottom right",
           pointerEvents: open ? "auto" as const : "none" as const,
-          transition: "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease",
+          transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, filter 0.3s ease",
           boxShadow: open
             ? "0 0 20px hsl(var(--glow-primary) / 0.2), 0 0 60px hsl(var(--glow-primary) / 0.08)"
             : "none",
