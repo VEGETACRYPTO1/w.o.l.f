@@ -134,7 +134,6 @@ export function ChatOverlay() {
             : "none",
         }}
       >
-          >
             <div
               className="rounded-xl overflow-hidden flex flex-col"
               style={{
