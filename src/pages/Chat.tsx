@@ -13,36 +13,48 @@ function openTab(query: string) {
   const url = query.startsWith("http")
     ? query
     : "https://www.google.com/search?q=" + encodeURIComponent(query);
-
-  const newWindow = window.open(url, "_blank");
-
-  if (!newWindow) {
-    window.location.href = url;
-  }
+  window.location.href = url;
 }
+
+const autoOpenedUrls = new Set<string>();
 
 function ChatMessage({ content }: { content: string }) {
-  // Detect clickable open links: 🌐 [Open: query](search:query)
- const linkMatch = content.match(/🌐 \[Open: (.+?)\]\(search:(.+?)\)/);
+  const linkMatch = content.match(/🌐 \[Open: (.+?)\]\(search:(.+?)\)/);
 
-if (linkMatch) {
-  const query = linkMatch[2];
+  useEffect(() => {
+    if (linkMatch) {
+      const query = linkMatch[2];
+      const url = query.startsWith("http")
+        ? query
+        : "https://www.google.com/search?q=" + encodeURIComponent(query);
+      if (!autoOpenedUrls.has(url)) {
+        autoOpenedUrls.add(url);
+        setTimeout(() => { window.location.href = url; }, 400);
+      }
+    }
+  }, [content]);
 
-  // AUTO OPEN
-  setTimeout(() => {
-    openTab(query);
-  }, 300);
+  // Also detect raw URLs in any assistant message
+  useEffect(() => {
+    if (!linkMatch) {
+      const urlMatch = content.match(/https?:\/\/[^\s)]+/);
+      if (urlMatch && !autoOpenedUrls.has(urlMatch[0])) {
+        // Don't auto-open raw URLs, just let markdown handle them
+      }
+    }
+  }, [content]);
 
-  return (
-    <button
-      onClick={() => openTab(query)}
-      className="flex items-center gap-2 text-primary hover:underline cursor-pointer text-left"
-    >
-      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-      Open: {query}
-    </button>
-  );
-}
+  if (linkMatch) {
+    const query = linkMatch[2];
+    return (
+      <button
+        onClick={() => openTab(query)}
+        className="flex items-center gap-2 text-primary hover:underline cursor-pointer text-left"
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+        Open: {query}
+      </button>
+    );
   }
   return <ReactMarkdown>{content}</ReactMarkdown>;
 }
