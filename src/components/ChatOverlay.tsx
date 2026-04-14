@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, X, User, Swords, Leaf, Brain, Mic, MicOff, Volume2 } from "lucide-react";
+import { Send, X, User, Swords, Leaf, Brain, Mic, MicOff, Volume2, ChevronDown } from "lucide-react";
 import { useMode, type Mode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 import {
   speak, stopSpeaking, getIsSpeaking,
   startListening, stopListening, isListening, isRecognitionSupported,
+  getAvailableVoices, getSelectedVoice, setVoice,
 } from "@/lib/wolfVoice";
 
 export function ChatOverlay() {
@@ -23,11 +24,27 @@ export function ChatOverlay() {
   const [showModeSelector, setShowModeSelector] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [currentVoiceName, setCurrentVoiceName] = useState("");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Load voices
+  useEffect(() => {
+    const load = () => {
+      const v = getAvailableVoices();
+      if (v.length) {
+        setVoices(v);
+        setCurrentVoiceName(getSelectedVoice()?.name || v[0]?.name || "");
+      }
+    };
+    load();
+    speechSynthesis.onvoiceschanged = load;
+  }, []);
 
   // Geolocation on mount
   useEffect(() => {
@@ -38,7 +55,7 @@ export function ChatOverlay() {
           lon: pos.coords.longitude,
         };
       },
-      () => { /* permission denied — fallback handled server-side */ }
+      () => {}
     );
   }, []);
 
