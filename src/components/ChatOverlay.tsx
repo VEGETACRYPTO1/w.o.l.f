@@ -21,6 +21,8 @@ export function ChatOverlay() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
+  const [voiceActive, setVoiceActive] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
