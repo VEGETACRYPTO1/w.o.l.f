@@ -106,32 +106,51 @@ function ParticleSphere({ colors }: { colors: ModeColorSet }) {
   const radius = 2;
   const originalPositions = useRef<Float32Array | null>(null);
   const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
+  // Store per-particle color tier (0=highlight, 1=mid, 2=shadow) — stable across mode changes
+  const colorTiers = useRef<Uint8Array | null>(null);
 
-  // Per-particle color variation
+  // Generate positions and color tiers ONCE
   const { positions, colorArray, offsets } = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const col = new Float32Array(count * 3);
     const offs = new Float32Array(count);
-    const cHighlight = new THREE.Color(colors.highlight);
-    const cMid = new THREE.Color(colors.mid);
-    const cShadow = new THREE.Color(colors.shadow);
+    const tiers = new Uint8Array(count);
     for (let i = 0; i < count; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(Math.random() * 2 - 1);
       pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
       pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
       pos[i * 3 + 2] = radius * Math.cos(phi);
-      // Color distribution: 20% highlight, 60% mid, 20% shadow
       const r = Math.random();
-      const c = r < 0.2 ? cHighlight : r < 0.8 ? cMid : cShadow;
-      col[i * 3] = c.r;
-      col[i * 3 + 1] = c.g;
-      col[i * 3 + 2] = c.b;
+      tiers[i] = r < 0.2 ? 0 : r < 0.8 ? 1 : 2;
       offs[i] = Math.random() * Math.PI * 2;
     }
+    colorTiers.current = tiers;
     originalPositions.current = pos.slice();
     return { positions: pos, colorArray: col, offsets: offs };
-  }, [colors.highlight, colors.mid, colors.shadow]);
+  }, []); // positions generated once, never reset
+
+  // Update colors reactively when mode changes
+  const colorsRef = useRef(colors);
+  colorsRef.current = colors;
+
+  // Apply colors every frame for smooth transitions
+  const applyColors = useCallback(() => {
+    if (!ref.current || !colorTiers.current) return;
+    const col = (ref.current.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
+    const tiers = colorTiers.current;
+    const c = colorsRef.current;
+    const cH = new THREE.Color(c.highlight);
+    const cM = new THREE.Color(c.mid);
+    const cS = new THREE.Color(c.shadow);
+    for (let i = 0; i < count; i++) {
+      const tc = tiers[i] === 0 ? cH : tiers[i] === 1 ? cM : cS;
+      col[i * 3] = tc.r;
+      col[i * 3 + 1] = tc.g;
+      col[i * 3 + 2] = tc.b;
+    }
+    ref.current.geometry.attributes.color.needsUpdate = true;
+  }, [count]);
 
   const doReset = useCallback(() => {
     if (!ref.current || !originalPositions.current) return;
