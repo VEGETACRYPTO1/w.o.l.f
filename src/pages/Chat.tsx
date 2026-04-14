@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Loader2, Swords, Leaf } from "lucide-react";
+import { Send, User, Loader2, Swords, Leaf, Brain } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
@@ -51,12 +51,16 @@ export default function Chat() {
     resetSphere();
   };
 
-  const selectMode = (selectedMode: "war" | "relax") => {
+  const selectMode = (selectedMode: "intelligence" | "war" | "relax") => {
     setMode(selectedMode);
     setAwaitingModeSelection(false);
     setLastWasModePrompt(false);
-    const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
-    setMessages((prev) => [...prev, { role: "assistant", content: label }]);
+    const labels: Record<string, string> = {
+      intelligence: "🧠 Intelligence Mode activated. Ask anything.",
+      war: "⚔️ War Mode activated. State your objective.",
+      relax: "🧘 Relax Mode activated. What would you like to work on?",
+    };
+    setMessages((prev) => [...prev, { role: "assistant", content: labels[selectedMode] }]);
   };
 
   const send = async () => {
@@ -76,9 +80,10 @@ export default function Chat() {
 
     if (awaitingModeSelection) {
       const lower = input.trim().toLowerCase();
+      if (lower.includes("intelligence")) { selectMode("intelligence"); return; }
       if (lower.includes("war")) { selectMode("war"); return; }
       if (lower.includes("relax")) { selectMode("relax"); return; }
-      setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "War" or "Relax" to choose your mode.' }]);
+      setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "Intelligence", "War", or "Relax" to choose your mode.' }]);
       return;
     }
 
@@ -99,9 +104,10 @@ export default function Chat() {
     await streamWolfChat({
       messages: newMessages.filter((m) =>
         m.content !== MODE_SELECTION_MSG &&
+        !m.content.startsWith("🧠 Intelligence Mode activated") &&
         !m.content.startsWith("⚔️ War Mode activated") &&
         !m.content.startsWith("🧘 Relax Mode activated") &&
-        m.content !== 'Please reply with "War" or "Relax" to choose your mode.'
+        m.content !== 'Please reply with "Intelligence", "War", or "Relax" to choose your mode.'
       ),
       mode,
       onDelta: upsertAssistant,
@@ -170,6 +176,19 @@ export default function Chat() {
         {awaitingModeSelection && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex gap-3 pl-10">
             <button
+              onClick={() => selectMode("intelligence")}
+              className="flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-bold transition-all hover:scale-105 border"
+              style={{
+                background: "rgba(255, 215, 0, 0.15)",
+                borderColor: "rgba(255, 215, 0, 0.4)",
+                color: "#FFD700",
+                boxShadow: "0 0 20px rgba(255, 215, 0, 0.2)",
+              }}
+            >
+              <Brain className="h-4 w-4" />
+              Intelligence
+            </button>
+            <button
               onClick={() => selectMode("war")}
               className="flex items-center gap-2 px-5 py-3 rounded-lg text-sm font-bold transition-all hover:scale-105 border"
               style={{
@@ -180,7 +199,7 @@ export default function Chat() {
               }}
             >
               <Swords className="h-4 w-4" />
-              War Mode
+              War
             </button>
             <button
               onClick={() => selectMode("relax")}
@@ -193,7 +212,7 @@ export default function Chat() {
               }}
             >
               <Leaf className="h-4 w-4" />
-              Relax Mode
+              Relax
             </button>
           </motion.div>
         )}
