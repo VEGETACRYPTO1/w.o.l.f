@@ -41,36 +41,36 @@
 
     --sidebar-background: 220 14% 7%;
     --sidebar-foreground: 215 14% 60%;
-    --sidebar-primary: 42 50% 55%;
+    --sidebar-primary: 38 52% 36%;
     --sidebar-primary-foreground: 0 0% 0%;
     --sidebar-accent: 220 12% 12%;
     --sidebar-accent-foreground: 210 20% 92%;
     --sidebar-border: 220 12% 12%;
-    --sidebar-ring: 42 50% 55%;
+    --sidebar-ring: 38 52% 36%;
 
     /* Mode colors */
-    --mode-intelligence: 42 50% 55%;
+    --mode-intelligence: 38 52% 36%;
     --mode-war: 0 72% 55%;
     --mode-rebuild: 215 80% 55%;
     --mode-expansion: 145 65% 45%;
     --mode-relax: 160 50% 45%;
 
     /* Glow effects */
-    --glow-primary: 42 80% 65%;
-    --glow-opacity: 0.15;
-    --glow-spread: 60px;
+    --glow-primary: 42 65% 50%;
+    --glow-opacity: 0.12;
+    --glow-spread: 40px;
   }
 
   [data-mode="intelligence"] {
-    --primary: 42 50% 55%;
+    --primary: 38 52% 36%;
     --primary-foreground: 0 0% 0%;
-    --ring: 42 50% 55%;
-    --sidebar-primary: 42 50% 55%;
+    --ring: 38 52% 36%;
+    --sidebar-primary: 38 52% 36%;
     --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-ring: 42 50% 55%;
-    --glow-primary: 42 80% 65%;
-    --glow-opacity: 0.15;
-    --glow-spread: 60px;
+    --sidebar-ring: 38 52% 36%;
+    --glow-primary: 42 65% 50%;
+    --glow-opacity: 0.12;
+    --glow-spread: 40px;
   }
 
   [data-mode="war"] {
