@@ -1,4 +1,4 @@
-import { getMemory, handleMemoryAction, type WolfMemory } from "./wolfMemory";
+import { getMemory, handleMemoryAction, tryOpenTab, type WolfMemory } from "./wolfMemory";
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
@@ -43,8 +43,20 @@ export async function streamWolfChat({
     if (contentType.includes("application/json")) {
       const data = await resp.json();
 
-      // Handle action responses (memory mutations)
+      // Handle action responses (memory mutations + openWebsite)
       if (data.action) {
+        if (data.action === "openWebsite") {
+          const query = data.data?.query || "";
+          const opened = tryOpenTab(query);
+          if (opened) {
+            onDelta("Opened.");
+          } else {
+            // Blocked — send clickable fallback
+            onDelta(`🌐 [Open: ${query}](search:${query})`);
+          }
+          onDone();
+          return;
+        }
         const label = handleMemoryAction(data.action, data.data || {});
         if (label && onAction) {
           onAction(label);
