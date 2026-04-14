@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Send, User, Loader2, Swords, Leaf, Brain } from "lucide-react";
+import { Send, User, Loader2, Swords, Leaf, Brain, Volume2 } from "lucide-react";
 import { useMode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { ExternalLink } from "lucide-react";
+import { getCurrentVoiceMode, setVoiceMode, type VoiceMode } from "@/lib/wolfVoice";
 
 function openTab(query: string) {
   const url = query.startsWith("http")
@@ -34,6 +35,47 @@ function ChatMessage({ content }: { content: string }) {
 }
 
 const MODE_SELECTION_MSG = "Choose your mode:";
+
+const VOICE_MODES: { id: VoiceMode; label: string; icon: string; color: string }[] = [
+  { id: "jarvis", label: "Jarvis", icon: "⚔️", color: "rgba(59,130,246,0.4)" },
+  { id: "friday", label: "Friday", icon: "🧠", color: "rgba(168,85,247,0.4)" },
+  { id: "robot", label: "Robot", icon: "🤖", color: "rgba(107,114,128,0.4)" },
+  { id: "intelligence", label: "Intel", icon: "⚡", color: "rgba(255,215,0,0.4)" },
+];
+
+function VoiceModeSelector() {
+  const [active, setActive] = useState<VoiceMode>(getCurrentVoiceMode());
+
+  const handleSelect = (mode: VoiceMode) => {
+    setActive(mode);
+    setVoiceMode(mode);
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <Volume2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      {VOICE_MODES.map((vm) => (
+        <button
+          key={vm.id}
+          onClick={() => handleSelect(vm.id)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+            active === vm.id
+              ? "scale-105 ring-1"
+              : "opacity-50 hover:opacity-80"
+          }`}
+          style={{
+            background: active === vm.id ? vm.color.replace("0.4", "0.15") : "transparent",
+            borderColor: active === vm.id ? vm.color : "transparent",
+            boxShadow: active === vm.id ? `0 0 8px ${vm.color}` : "none",
+          }}
+        >
+          <span>{vm.icon}</span>
+          {vm.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function WolfLogo({ onClick }: { onClick: () => void }) {
   return (
@@ -257,7 +299,8 @@ export default function Chat() {
         <div ref={endRef} />
       </div>
 
-      <div className="border-t border-border pt-4">
+      <div className="border-t border-border pt-4 space-y-3">
+        <VoiceModeSelector />
         <form
           onSubmit={(e) => {
             e.preventDefault();
