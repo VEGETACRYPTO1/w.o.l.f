@@ -219,7 +219,14 @@ function _autoStartListening() {
 
     // 🐺 WAKE WORD
     const isWake = handleWakeWord(text);
-    if (!isWake && wolfActive && commandCallback) {
+    if (isWake) { isProcessing = false; return; }
+
+    // ⚔️ MODE SWITCH via voice
+    const modeResult = handleVoiceModeSwitch(text);
+    if (modeResult) { isProcessing = false; return; }
+
+    // 🧠 NORMAL COMMAND
+    if (wolfActive && commandCallback) {
       if (isSpeaking) { speechSynthesis.cancel(); isSpeaking = false; }
       commandCallback(text);
     }
