@@ -39,7 +39,14 @@ export async function speak(text: string): Promise<void> {
       body: JSON.stringify({ text: clean }),
     });
 
-    if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
+    // Check if response is audio or a JSON error
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!res.ok || contentType.includes("application/json")) {
+      // ElevenLabs failed — use browser TTS fallback
+      console.warn("TTS API unavailable, using browser fallback");
+      return speakFallback(clean);
+    }
 
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -63,10 +70,8 @@ export async function speak(text: string): Promise<void> {
       audio.play().catch(reject);
     });
   } catch (err) {
-    isSpeaking = false;
-    currentAudio = null;
-    console.error("Voice error:", err);
-    throw err;
+    console.warn("TTS error, trying browser fallback:", err);
+    return speakFallback(clean);
   }
 }
 
