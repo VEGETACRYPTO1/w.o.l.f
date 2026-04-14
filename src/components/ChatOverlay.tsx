@@ -95,6 +95,11 @@ export function ChatOverlay() {
         // onCommand: interrupt speech + send
         speechSynthesis.cancel();
         send(text);
+      },
+      (text, role) => {
+        // onMessage: voice-triggered messages (wake greeting, mode switch)
+        const msgRole = role === "ai" ? "assistant" : "user";
+        setMessages((prev) => [...prev, { role: msgRole, content: text }]);
       }
     );
     return () => stopHandsFree();
