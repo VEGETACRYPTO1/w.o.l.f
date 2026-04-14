@@ -45,14 +45,19 @@ interface ModeContextType {
 const ModeContext = createContext<ModeContextType | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode] = useState<Mode>(() => {
-    return (localStorage.getItem("jarvis-mode") as Mode) || "war";
-  });
+  const [mode, setModeState] = useState<Mode>("war");
 
+  // On mount: wipe stored mode, default to war
   useEffect(() => {
-    localStorage.setItem("jarvis-mode", mode);
-    document.documentElement.setAttribute("data-mode", mode);
-  }, [mode]);
+    localStorage.removeItem("jarvis-mode");
+    document.documentElement.setAttribute("data-mode", "war");
+  }, []);
+
+  const setMode = (newMode: Mode) => {
+    setModeState(newMode);
+    localStorage.setItem("jarvis-mode", newMode);
+    document.documentElement.setAttribute("data-mode", newMode);
+  };
 
   return (
     <ModeContext.Provider value={{ mode, setMode, config: MODE_CONFIGS[mode] }}>
