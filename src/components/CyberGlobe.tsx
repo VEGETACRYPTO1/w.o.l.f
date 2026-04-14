@@ -130,21 +130,35 @@ function ParticleSphere({ colors }: { colors: ModeColorSet }) {
     return { positions: pos, colorArray: col, offsets: offs };
   }, []); // positions generated once, never reset
 
-  // Update colors reactively when mode changes
-  const colorsRef = useRef(colors);
-  colorsRef.current = colors;
+  // Target colors (what we're lerping toward)
+  const targetColors = useRef({ highlight: new THREE.Color(colors.highlight), mid: new THREE.Color(colors.mid), shadow: new THREE.Color(colors.shadow) });
+  // Current interpolated colors
+  const currentColors = useRef({ highlight: new THREE.Color(colors.highlight), mid: new THREE.Color(colors.mid), shadow: new THREE.Color(colors.shadow) });
 
-  // Apply colors every frame for smooth transitions
+  // Update targets when mode changes
+  useEffect(() => {
+    targetColors.current.highlight.set(colors.highlight);
+    targetColors.current.mid.set(colors.mid);
+    targetColors.current.shadow.set(colors.shadow);
+  }, [colors.highlight, colors.mid, colors.shadow]);
+
+  const lerpSpeed = 0.04; // smooth transition speed
+
+  // Lerp colors every frame
   const applyColors = useCallback(() => {
     if (!ref.current || !colorTiers.current) return;
     const col = (ref.current.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
     const tiers = colorTiers.current;
-    const c = colorsRef.current;
-    const cH = new THREE.Color(c.highlight);
-    const cM = new THREE.Color(c.mid);
-    const cS = new THREE.Color(c.shadow);
+    const cur = currentColors.current;
+    const tgt = targetColors.current;
+
+    // Lerp current toward target
+    cur.highlight.lerp(tgt.highlight, lerpSpeed);
+    cur.mid.lerp(tgt.mid, lerpSpeed);
+    cur.shadow.lerp(tgt.shadow, lerpSpeed);
+
     for (let i = 0; i < count; i++) {
-      const tc = tiers[i] === 0 ? cH : tiers[i] === 1 ? cM : cS;
+      const tc = tiers[i] === 0 ? cur.highlight : tiers[i] === 1 ? cur.mid : cur.shadow;
       col[i * 3] = tc.r;
       col[i * 3 + 1] = tc.g;
       col[i * 3 + 2] = tc.b;
