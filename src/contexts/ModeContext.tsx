@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { onModeChange } from "@/lib/wolfVoice";
+import { onModeChange, setVoiceMode, type VoiceMode } from "@/lib/wolfVoice";
 
 export type Mode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
 
@@ -64,13 +64,20 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
     setModeState(newMode);
     localStorage.setItem("jarvis-mode", newMode);
     document.documentElement.setAttribute("data-mode", newMode);
+    // Sync voice system (CSS vars, body classes, globe)
+    const voiceModes: VoiceMode[] = ["intelligence", "war", "relax"];
+    if (voiceModes.includes(newMode as VoiceMode)) {
+      setVoiceMode(newMode as VoiceMode);
+    }
   }, []);
 
-  // Bridge voice system mode changes to React state
+  // Bridge voice system mode changes to React state (voice-initiated only)
   useEffect(() => {
     onModeChange((voiceMode) => {
       if (voiceMode === "intelligence" || voiceMode === "war" || voiceMode === "relax") {
+        // Only update React state, don't call setMode to avoid loop
         setModeState(voiceMode);
+        document.documentElement.setAttribute("data-mode", voiceMode);
       }
     });
   }, []);
