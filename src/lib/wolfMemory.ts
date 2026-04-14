@@ -18,6 +18,13 @@ export function saveMemory(memory: WolfMemory) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
 }
 
+function openTab(query: string) {
+  const url = query.startsWith("http")
+    ? query
+    : `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  window.open(url, "_blank");
+}
+
 export function handleMemoryAction(
   action: string,
   data: Record<string, string>
@@ -40,6 +47,11 @@ export function handleMemoryAction(
     memory.habits.push(data.habit);
     saveMemory(memory);
     return `🔁 Habit started: "${data.habit}"`;
+  }
+
+  if (action === "openWebsite") {
+    openTab(data.query);
+    return `🌐 Opening: ${data.query}`;
   }
 
   return "";
