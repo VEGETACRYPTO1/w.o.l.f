@@ -9,6 +9,7 @@ const SESSION_ID = `wolf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}
 export async function streamWolfChat({
   messages,
   mode,
+  location,
   onDelta,
   onDone,
   onError,
@@ -16,6 +17,7 @@ export async function streamWolfChat({
 }: {
   messages: Msg[];
   mode: string;
+  location?: { lat: number; lon: number };
   onDelta: (text: string) => void;
   onDone: () => void;
   onError: (err: string) => void;
