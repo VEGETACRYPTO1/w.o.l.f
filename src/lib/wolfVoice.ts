@@ -1,22 +1,17 @@
-// ─── Browser Voice (Free + Instant) ───
+// ==========================
+// 🔊 UNIVERSAL VOICE ENGINE (ALL DEVICES)
+// ==========================
 
-let voicesLoaded = false;
-let selectedVoice: SpeechSynthesisVoice | null = null;
-let currentAudio: HTMLAudioElement | null = null;
+let voices: SpeechSynthesisVoice[] = [];
+let voiceReady = false;
 let isSpeaking = false;
 
 function loadVoices() {
-  const voices = speechSynthesis.getVoices();
-  if (!voices.length) return;
-
-  selectedVoice =
-    voices.find((v) => v.name.includes("Google") && v.lang.includes("en")) ||
-    voices.find((v) => v.name.includes("Samantha")) ||
-    voices.find((v) => v.lang.includes("en")) ||
-    voices[0];
-
-  voicesLoaded = true;
-  console.log("🔊 Voice selected:", selectedVoice?.name);
+  voices = speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    voiceReady = true;
+    console.log("🔊 Voices loaded:", voices.length);
+  }
 }
 
 if (typeof window !== "undefined" && window.speechSynthesis) {
@@ -24,7 +19,33 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
   loadVoices();
 }
 
-// ─── Public API ───
+// ==========================
+// 🔊 UNLOCK AUDIO (MOBILE FIX)
+// ==========================
+
+let audioUnlocked = false;
+
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try {
+    const utter = new SpeechSynthesisUtterance(" ");
+    speechSynthesis.speak(utter);
+    speechSynthesis.cancel();
+    audioUnlocked = true;
+    console.log("🔓 Audio unlocked");
+  } catch (e) {}
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("click", () => {
+    unlockAudio();
+    speechSynthesis.resume();
+  }, { once: true });
+}
+
+// ==========================
+// 🔊 PUBLIC API
+// ==========================
 
 export function getIsSpeaking() {
   return isSpeaking;
@@ -32,11 +53,6 @@ export function getIsSpeaking() {
 
 export function stopSpeaking() {
   speechSynthesis.cancel();
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
-    currentAudio = null;
-  }
   isSpeaking = false;
 }
 
@@ -49,34 +65,75 @@ export async function speak(text: string): Promise<void> {
 
   if (!clean) return;
 
-  if (!voicesLoaded) loadVoices();
+  try {
+    speechSynthesis.cancel();
 
-  // Interrupt current speech
-  speechSynthesis.cancel();
-  isSpeaking = true;
+    if (!voiceReady) {
+      loadVoices();
+      return new Promise((resolve) => {
+        setTimeout(() => { speak(clean).then(resolve); }, 200);
+      });
+    }
 
-  return new Promise<void>((resolve) => {
-    const utterance = new SpeechSynthesisUtterance(clean);
-    if (selectedVoice) utterance.voice = selectedVoice;
+    isSpeaking = true;
 
-    utterance.rate = 1.05;
-    utterance.pitch = 0.9;
-    utterance.volume = 1;
+    return new Promise<void>((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(clean);
 
-    utterance.onend = () => {
-      isSpeaking = false;
-      resolve();
-    };
-    utterance.onerror = () => {
-      isSpeaking = false;
-      resolve();
-    };
+      const selectedVoice =
+        voices.find((v) => v.name.includes("Google") && v.lang.includes("en")) ||
+        voices.find((v) => v.name.includes("Samantha")) ||
+        voices.find((v) => v.lang.includes("en")) ||
+        voices[0];
 
-    speechSynthesis.speak(utterance);
-  });
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.rate = 1.03;
+      utterance.pitch = 0.9;
+      utterance.volume = 1;
+
+      utterance.onstart = () => {
+        console.log("🗣️ WOLF speaking...");
+      };
+
+      utterance.onend = () => {
+        console.log("✅ Done speaking");
+        isSpeaking = false;
+        resolve();
+      };
+
+      utterance.onerror = (e) => {
+        console.log("❌ Speech error:", e);
+        isSpeaking = false;
+        // Retry once on fail
+        setTimeout(() => {
+          try { speechSynthesis.speak(utterance); } catch {}
+        }, 200);
+        resolve();
+      };
+
+      speechSynthesis.resume();
+      speechSynthesis.speak(utterance);
+    });
+  } catch (err) {
+    console.log("Speech failed:", err);
+    isSpeaking = false;
+  }
 }
 
-// ─── Speech Recognition (STT) ───
+// ==========================
+// 🧪 DEBUG TEST
+// ==========================
+
+export function testVoice() {
+  speak("W.O.L.F fully operational, SK.");
+}
+
+// ==========================
+// 🎤 SPEECH RECOGNITION (STT)
+// ==========================
 
 let recognition: any = null;
 let onResultCallback: ((text: string) => void) | null = null;
@@ -102,7 +159,6 @@ export function startListening(onResult: (text: string) => void): boolean {
     const result = event.results[event.results.length - 1];
     const text = result[0].transcript.trim();
     if (!result.isFinal && text.length < 4) return;
-
     if (result.isFinal && text && onResultCallback) {
       onResultCallback(text);
     }
@@ -145,7 +201,9 @@ export function isListening(): boolean {
   return recognition !== null;
 }
 
-// ─── Wake Word + Hands-Free System ───
+// ==========================
+// 🐺 WAKE WORD + HANDS-FREE
+// ==========================
 
 let wolfActive = false;
 let wakeWordCallback: (() => void) | null = null;
