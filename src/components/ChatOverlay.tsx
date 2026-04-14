@@ -345,22 +345,74 @@ export function ChatOverlay() {
                 <div ref={endRef} />
               </div>
 
+              {/* Voice Picker */}
+              <AnimatePresence>
+                {showVoicePicker && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-t"
+                    style={{ borderColor: "hsl(var(--primary) / 0.2)" }}
+                  >
+                    <div className="p-3 max-h-[120px] overflow-y-auto space-y-1">
+                      <div className="text-[10px] text-muted-foreground font-bold tracking-wider mb-1">SELECT VOICE</div>
+                      {voices.map((v) => (
+                        <button
+                          key={v.name}
+                          onClick={() => {
+                            setVoice(v);
+                            setCurrentVoiceName(v.name);
+                            setShowVoicePicker(false);
+                            speak("W.O.L.F voice updated.").catch(() => {});
+                          }}
+                          className="w-full text-left px-2 py-1.5 rounded text-xs transition-all flex items-center justify-between"
+                          style={{
+                            background: v.name === currentVoiceName ? "hsl(var(--primary) / 0.2)" : "transparent",
+                            color: v.name === currentVoiceName ? "hsl(var(--primary))" : "hsl(var(--foreground) / 0.7)",
+                          }}
+                        >
+                          <span className="truncate">{v.name}</span>
+                          {v.name === currentVoiceName && <span className="text-[10px] text-primary ml-1">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Input */}
               <div className="p-3 border-t" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
                 <form data-wolf-form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-2">
-                  {/* Voice toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setVoiceEnabled((v) => !v)}
-                    className="h-8 w-8 rounded-md flex items-center justify-center transition-all shrink-0"
-                    style={{
-                      background: voiceEnabled ? "hsl(var(--primary) / 0.2)" : "rgba(255,255,255,0.05)",
-                      border: voiceEnabled ? "1px solid hsl(var(--primary) / 0.4)" : "1px solid transparent",
-                    }}
-                    title={voiceEnabled ? "Voice responses ON" : "Voice responses OFF"}
-                  >
-                    <Volume2 className={`h-3.5 w-3.5 ${voiceEnabled ? "text-primary" : "text-muted-foreground"}`} />
-                  </button>
+                  {/* Voice toggle + picker */}
+                  <div className="flex items-center shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setVoiceEnabled((v) => !v)}
+                      className="h-8 w-8 rounded-l-md flex items-center justify-center transition-all"
+                      style={{
+                        background: voiceEnabled ? "hsl(var(--primary) / 0.2)" : "rgba(255,255,255,0.05)",
+                        border: voiceEnabled ? "1px solid hsl(var(--primary) / 0.4)" : "1px solid transparent",
+                      }}
+                      title={voiceEnabled ? "Voice responses ON" : "Voice responses OFF"}
+                    >
+                      <Volume2 className={`h-3.5 w-3.5 ${voiceEnabled ? "text-primary" : "text-muted-foreground"}`} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowVoicePicker((v) => !v)}
+                      className="h-8 w-4 rounded-r-md flex items-center justify-center transition-all"
+                      style={{
+                        background: showVoicePicker ? "hsl(var(--primary) / 0.2)" : "rgba(255,255,255,0.05)",
+                        borderTop: "1px solid " + (showVoicePicker ? "hsl(var(--primary) / 0.4)" : "transparent"),
+                        borderRight: "1px solid " + (showVoicePicker ? "hsl(var(--primary) / 0.4)" : "transparent"),
+                        borderBottom: "1px solid " + (showVoicePicker ? "hsl(var(--primary) / 0.4)" : "transparent"),
+                      }}
+                      title="Select voice"
+                    >
+                      <ChevronDown className={`h-2.5 w-2.5 transition-transform ${showVoicePicker ? "rotate-180 text-primary" : "text-muted-foreground"}`} />
+                    </button>
+                  </div>
                   {/* Mic button */}
                   <button
                     type="button"
