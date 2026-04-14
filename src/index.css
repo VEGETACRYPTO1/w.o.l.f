@@ -154,6 +154,11 @@
 }
 
 @layer utilities {
+  @keyframes wolfPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
   .glow-primary {
     box-shadow: 0 0 20px hsl(var(--glow-primary) / var(--glow-opacity)),
                 0 0 var(--glow-spread) hsl(var(--glow-primary) / calc(var(--glow-opacity) * 0.5));
