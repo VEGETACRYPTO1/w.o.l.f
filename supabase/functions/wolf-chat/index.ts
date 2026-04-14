@@ -158,18 +158,23 @@ serve(async (req) => {
       const WEATHER_API_KEY = Deno.env.get("WEATHER_API_KEY");
       if (WEATHER_API_KEY) {
         try {
-          const city = "Dubai";
-          // Current weather
+          // Use real user coordinates if available, fallback to Dubai
+          const hasCoords = location?.lat != null && location?.lon != null;
+          const weatherQuery = hasCoords
+            ? `lat=${location.lat}&lon=${location.lon}`
+            : `q=Dubai`;
+
           const weatherRes = await fetch(
-            `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
+            `https://api.openweathermap.org/data/2.5/weather?${weatherQuery}&appid=${WEATHER_API_KEY}&units=metric`
           );
           const weatherData = await weatherRes.json();
+          const cityName = weatherData.name || "Unknown";
           if (weatherData.main) {
-            externalData += `Current: ${city}: ${Math.round(weatherData.main.temp)}°C, ${weatherData.weather?.[0]?.description || "N/A"}\n`;
+            externalData += `${Math.round(weatherData.main.temp)}°C, ${weatherData.weather?.[0]?.description || "N/A"} — ${cityName}\n`;
           }
-          // 3-day forecast
+
           const forecastRes = await fetch(
-            `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${WEATHER_API_KEY}&units=metric&cnt=24`
+            `https://api.openweathermap.org/data/2.5/forecast?${weatherQuery}&appid=${WEATHER_API_KEY}&units=metric&cnt=24`
           );
           const forecastData = await forecastRes.json();
           if (forecastData.list?.length) {
@@ -178,7 +183,7 @@ serve(async (req) => {
               const idx = Math.min((d + 1) * 8 - 1, forecastData.list.length - 1);
               dailyTemps.push(Math.round(forecastData.list[idx].main.temp));
             }
-            externalData += `Forecast next 3 days: ${dailyTemps.map(t => t + "°").join(", ")}`;
+            externalData += `Next: ${dailyTemps.map(t => t + "°").join(", ")}`;
           }
         } catch (e) {
           console.error("Weather fetch error:", e);
