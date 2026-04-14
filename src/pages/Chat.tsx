@@ -37,10 +37,9 @@ function ChatMessage({ content }: { content: string }) {
 const MODE_SELECTION_MSG = "Choose your mode:";
 
 const VOICE_MODES: { id: VoiceMode; label: string; icon: string; color: string }[] = [
-  { id: "jarvis", label: "Jarvis", icon: "⚔️", color: "rgba(59,130,246,0.4)" },
-  { id: "friday", label: "Friday", icon: "🧠", color: "rgba(168,85,247,0.4)" },
-  { id: "robot", label: "Robot", icon: "🤖", color: "rgba(107,114,128,0.4)" },
-  { id: "intelligence", label: "Intel", icon: "⚡", color: "rgba(255,215,0,0.4)" },
+  { id: "intelligence", label: "Intel", icon: "🧠", color: "rgba(255,215,0,0.4)" },
+  { id: "war", label: "War", icon: "⚔️", color: "rgba(239,68,68,0.4)" },
+  { id: "relax", label: "Relax", icon: "🧘", color: "rgba(34,197,94,0.4)" },
 ];
 
 function VoiceModeSelector() {
