@@ -1,13 +1,37 @@
-const TTS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-tts`;
+// ─── Browser Voice (Free + Instant) ───
 
+let voicesLoaded = false;
+let selectedVoice: SpeechSynthesisVoice | null = null;
 let currentAudio: HTMLAudioElement | null = null;
 let isSpeaking = false;
+
+function loadVoices() {
+  const voices = speechSynthesis.getVoices();
+  if (!voices.length) return;
+
+  selectedVoice =
+    voices.find((v) => v.name.includes("Google") && v.lang.includes("en")) ||
+    voices.find((v) => v.name.includes("Samantha")) ||
+    voices.find((v) => v.lang.includes("en")) ||
+    voices[0];
+
+  voicesLoaded = true;
+  console.log("🔊 Voice selected:", selectedVoice?.name);
+}
+
+if (typeof window !== "undefined" && window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = loadVoices;
+  loadVoices();
+}
+
+// ─── Public API ───
 
 export function getIsSpeaking() {
   return isSpeaking;
 }
 
 export function stopSpeaking() {
+  speechSynthesis.cancel();
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.currentTime = 0;
@@ -25,68 +49,20 @@ export async function speak(text: string): Promise<void> {
 
   if (!clean) return;
 
-  stopSpeaking();
+  if (!voicesLoaded) loadVoices();
+
+  // Interrupt current speech
+  speechSynthesis.cancel();
   isSpeaking = true;
 
-  try {
-    const res = await fetch(TTS_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-      },
-      body: JSON.stringify({ text: clean }),
-    });
-
-    // Check if response is audio or a JSON error
-    const contentType = res.headers.get("content-type") || "";
-
-    if (!res.ok || contentType.includes("application/json")) {
-      // ElevenLabs failed — use browser TTS fallback
-      console.warn("TTS API unavailable, using browser fallback");
-      return speakFallback(clean);
-    }
-
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    currentAudio = audio;
-    audio.playbackRate = 1.1;
-
-    await new Promise<void>((resolve, reject) => {
-      audio.onended = () => {
-        isSpeaking = false;
-        currentAudio = null;
-        URL.revokeObjectURL(url);
-        resolve();
-      };
-      audio.onerror = () => {
-        isSpeaking = false;
-        currentAudio = null;
-        URL.revokeObjectURL(url);
-        reject(new Error("Audio playback failed"));
-      };
-      audio.play().catch(reject);
-    });
-  } catch (err) {
-    console.warn("TTS error, trying browser fallback:", err);
-    return speakFallback(clean);
-  }
-}
-
-// ─── Browser TTS Fallback ───
-
-function speakFallback(text: string): Promise<void> {
   return new Promise<void>((resolve) => {
-    if (!window.speechSynthesis) {
-      isSpeaking = false;
-      resolve();
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(clean);
+    if (selectedVoice) utterance.voice = selectedVoice;
+
     utterance.rate = 1.05;
     utterance.pitch = 0.9;
+    utterance.volume = 1;
+
     utterance.onend = () => {
       isSpeaking = false;
       resolve();
@@ -95,7 +71,8 @@ function speakFallback(text: string): Promise<void> {
       isSpeaking = false;
       resolve();
     };
-    window.speechSynthesis.speak(utterance);
+
+    speechSynthesis.speak(utterance);
   });
 }
 
@@ -123,7 +100,6 @@ export function startListening(onResult: (text: string) => void): boolean {
 
   recognition.onresult = (event: any) => {
     const result = event.results[event.results.length - 1];
-    // Process interim results for speed if long enough
     const text = result[0].transcript.trim();
     if (!result.isFinal && text.length < 4) return;
 
@@ -134,13 +110,11 @@ export function startListening(onResult: (text: string) => void): boolean {
 
   recognition.onerror = (event: any) => {
     console.error("Speech recognition error:", event.error);
-    // Don't stop on no-speech errors, just let it restart
     if (event.error === "no-speech" || event.error === "aborted") return;
     stopListening();
   };
 
   recognition.onend = () => {
-    // Ultra-fast restart for continuous listening
     if (keepListening) {
       setTimeout(() => {
         try { recognition?.start(); } catch {}
@@ -192,7 +166,6 @@ export function startHandsFree(onWake: () => void, onCommand: (text: string) => 
     if (!wolfActive && lower.includes("hey wolf")) {
       wolfActive = true;
       wakeWordCallback?.();
-      // Greet user
       const hour = new Date().getHours();
       const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
       speak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
@@ -201,10 +174,8 @@ export function startHandsFree(onWake: () => void, onCommand: (text: string) => 
 
     if (!wolfActive) return;
 
-    // Interrupt current speech instantly
-    if (isSpeaking && currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
+    if (isSpeaking) {
+      speechSynthesis.cancel();
       isSpeaking = false;
     }
 
