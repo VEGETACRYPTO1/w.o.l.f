@@ -1,5 +1,5 @@
 // ==========================
-// 🐺 W.O.L.F FINAL MASTER SYSTEM
+// 🐺 W.O.L.F CORE FIXED SYSTEM
 // ==========================
 
 export type VoiceMode = "intelligence" | "war" | "relax";
@@ -27,16 +27,8 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
   loadVoices();
 }
 
-function getBestVoice(): SpeechSynthesisVoice | undefined {
-  return (
-    voices.find(v => v.name.includes("Google UK English Male")) ||
-    voices.find(v => v.name.includes("Samantha")) ||
-    voices[0]
-  );
-}
-
 // ==========================
-// 🔓 UNLOCK AUDIO (CRITICAL)
+// 🔓 UNLOCK AUDIO
 // ==========================
 
 function unlockAudio() {
@@ -62,6 +54,40 @@ if (typeof window !== "undefined") {
 }
 
 // ==========================
+// 🎯 MODE SWITCH (MASTER FIX)
+// ==========================
+
+function setMode(mode: VoiceMode) {
+  currentMode = mode;
+
+  // 🔥 FORCE UI RESET
+  document.body.classList.remove("mode-war", "mode-relax", "mode-intelligence");
+  document.body.classList.add(`mode-${mode}`);
+  document.documentElement.setAttribute("data-mode", mode);
+
+  // 🔥 FORCE GLOBE COLOR via CSS variable
+  const colorMap: Record<VoiceMode, string> = {
+    war: "#ff3b3b",
+    relax: "#00ffc6",
+    intelligence: "#ffd700",
+  };
+  const color = colorMap[mode];
+  document.documentElement.style.setProperty("--wolf-glow", color);
+
+  // 🔥 HARD FORCE CANVAS (if scene exists on window)
+  const w = window as any;
+  if (w.scene) {
+    w.scene.traverse((obj: any) => {
+      if (obj.material && obj.material.color) {
+        obj.material.color.set(color);
+      }
+    });
+  }
+
+  console.log("MODE:", mode);
+}
+
+// ==========================
 // 🔊 SPEAK
 // ==========================
 
@@ -83,17 +109,13 @@ function wolfSpeak(text: string): Promise<void> {
 
   try {
     speechSynthesis.cancel();
-
     return new Promise<void>((resolve) => {
       const utter = new SpeechSynthesisUtterance(clean);
-      utter.voice = getBestVoice() || null;
       utter.rate = 1.05;
       utter.pitch = 0.85;
       utter.volume = 1;
-
       utter.onend = () => resolve();
       utter.onerror = () => resolve();
-
       speechSynthesis.resume();
       speechSynthesis.speak(utter);
       console.log("🐺 WOLF speaking:", clean.substring(0, 60));
@@ -109,42 +131,10 @@ if (typeof window !== "undefined") {
 }
 
 // ==========================
-// 🌍 GLOBE COLOR CONTROL
+// 🐺 WAKE SYSTEM (FIXED)
 // ==========================
 
-function updateGlobeColor() {
-  let color: number;
-  if (currentMode === "war") {
-    color = 0xff3b3b;
-  } else if (currentMode === "relax") {
-    color = 0x00ffc6;
-  } else {
-    color = 0xffd700;
-  }
-
-  const w = window as any;
-  if (w.globeParticles) w.globeParticles.material.color.setHex(color);
-  if (w.globeLines) w.globeLines.material.color.setHex(color);
-  if (w.globeGlow) w.globeGlow.material.color.setHex(color);
-  console.log("🌍 Globe updated:", currentMode);
-}
-
-// ==========================
-// 🎨 APPLY MODE UI + GLOBE
-// ==========================
-
-function applyModeUI() {
-  document.body.className = document.body.className.replace(/mode-\w+/g, "").trim();
-  document.body.classList.add(`mode-${currentMode}`);
-  document.documentElement.setAttribute("data-mode", currentMode);
-  updateGlobeColor();
-}
-
-// ==========================
-// 🐺 WAKE SYSTEM
-// ==========================
-
-function handleWakeWord(text: string): boolean {
+function handleWake(text: string): boolean {
   const t = text.toLowerCase();
   if (!t.includes("hey wolf") && !t.includes("wake up") && !t.includes("hello wolf")) return false;
 
@@ -157,27 +147,26 @@ function handleWakeWord(text: string): boolean {
 }
 
 // ==========================
-// ⚔️ MODE SWITCH (VOICE)
+// 🎤 VOICE MODE SWITCH
 // ==========================
 
 function handleModeSwitch(text: string): boolean {
   const t = text.toLowerCase();
   if (t.includes("war mode")) {
-    currentMode = "war";
+    setMode("war");
   } else if (t.includes("relax mode")) {
-    currentMode = "relax";
+    setMode("relax");
   } else if (t.includes("intelligence mode")) {
-    currentMode = "intelligence";
+    setMode("intelligence");
   } else {
     return false;
   }
-  applyModeUI();
   wolfSpeak(`${currentMode} mode activated`).catch(() => {});
   return true;
 }
 
 // ==========================
-// 🎤 LISTEN SYSTEM
+// 🎤 LISTEN (CONTINUOUS FIX)
 // ==========================
 
 export function isRecognitionSupported(): boolean {
@@ -196,16 +185,16 @@ function _autoStartListening() {
     const text = event.results[event.results.length - 1][0].transcript.trim();
     console.log("🎤 Heard:", text);
 
-    // 🐺 WAKE
+    // Wake once
     if (!isAwake) {
-      handleWakeWord(text);
+      handleWake(text);
       return;
     }
 
-    // 🎯 MODE SWITCH
+    // Mode switch
     if (handleModeSwitch(text)) return;
 
-    // 🧠 NORMAL FLOW
+    // Normal flow
     if (commandCallback) commandCallback(text);
   };
 
@@ -229,7 +218,7 @@ export const speak = wolfSpeak;
 export function getIsSpeaking() { return false; }
 export function stopSpeaking() { speechSynthesis.cancel(); }
 export function getCurrentVoiceMode(): VoiceMode { return currentMode; }
-export function setVoiceMode(mode: VoiceMode) { currentMode = mode; applyModeUI(); wolfSpeak(`${mode} mode activated`); }
+export function setVoiceMode(mode: VoiceMode) { setMode(mode); wolfSpeak(`${mode} mode activated`); }
 export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
 export function isWolfActive() { return isAwake; }
 export function isListening(): boolean { return _isListening; }
@@ -256,17 +245,17 @@ export function startListening(onResult: (text: string) => void): boolean { comm
 // ==========================
 
 export function replayLast() {
-  const messages = document.querySelectorAll(".ai-message");
-  const last = messages[messages.length - 1];
+  const msgs = document.querySelectorAll(".ai-message");
+  const last = msgs[msgs.length - 1];
   if (last) wolfSpeak(last.textContent || "");
 }
 
 // ==========================
-// 🚀 AUTO START
+// 🚀 INIT
 // ==========================
 
 if (typeof window !== "undefined") {
   window.addEventListener("load", () => {
-    applyModeUI();
+    setMode("intelligence"); // default gold
   });
 }
