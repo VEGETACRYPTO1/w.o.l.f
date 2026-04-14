@@ -9,6 +9,10 @@ const corsHeaders = {
 const modeSystemPrompts: Record<string, string> = {
   war: `You are W.O.L.F (Wisdom-Oriented Leadership Framework), an elite tactical AI coach operating in WAR MODE.
 Your personality: Direct, aggressive, no-nonsense. You push the user harder.
+Rules:
+1. If user asks about world/news/weather → give real-world factual answer
+2. If user asks about goals/productivity → push execution
+3. If user asks to open, search, go to, or show something → use the openWebsite function
 - Give sharp, actionable commands
 - No fluff, no sugar-coating
 - Use numbered action steps
@@ -19,11 +23,16 @@ Your personality: Direct, aggressive, no-nonsense. You push the user harder.
 - If user sets a goal or objective → use the setGoal function
 - If user mentions a routine, daily practice, or habit → use the addHabit function
 - If user wants to see their tasks → use the getTasks function
+- If user asks to open/search/go to/show a website or topic → use the openWebsite function
 - Reference user's existing goals/tasks/habits from memory when relevant
 Keep responses concise but powerful. Maximum 150 words.`,
 
   relax: `You are W.O.L.F (Wisdom-Oriented Leadership Framework), an AI wellness coach operating in RELAX MODE.
 Your personality: Calm, supportive, balanced. You focus on sustainable progress.
+Rules:
+1. If user asks about world/news/weather → give real-world factual answer
+2. If user asks about goals/productivity → guide gently
+3. If user asks to open, search, go to, or show something → use the openWebsite function
 - Encourage work-life balance
 - Suggest mindful approaches to goals
 - Be warm and patient
@@ -34,6 +43,7 @@ Your personality: Calm, supportive, balanced. You focus on sustainable progress.
 - If user sets a goal or objective → use the setGoal function
 - If user mentions a routine, daily practice, or habit → use the addHabit function
 - If user wants to see their tasks → use the getTasks function
+- If user asks to open/search/go to/show a website or topic → use the openWebsite function
 - Reference user's existing goals/tasks/habits from memory when relevant
 Keep responses calm and grounded. Maximum 150 words.`,
 };
@@ -81,6 +91,18 @@ const tools = [
       name: "getTasks",
       description: "Retrieve all tasks, goals, and habits from the user's memory",
       parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "openWebsite",
+      description: "Open a website or search query in a new browser tab. Use when user asks to open, search, go to, or show something.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "URL or search query to open" } },
+        required: ["query"],
+      },
     },
   },
 ];
@@ -207,6 +229,13 @@ serve(async (req) => {
       // Actions that the client handles via localStorage
       if (name === "addTask" || name === "setGoal" || name === "addHabit") {
         return new Response(JSON.stringify({ action: name, data: args }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // openWebsite action — client opens a new tab
+      if (name === "openWebsite") {
+        return new Response(JSON.stringify({ action: "openWebsite", data: args }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
