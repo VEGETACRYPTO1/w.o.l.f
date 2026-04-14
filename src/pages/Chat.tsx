@@ -66,7 +66,7 @@ function VoiceModeSelector() {
           style={{
             background: active === vm.id ? vm.color.replace("0.4", "0.15") : "transparent",
             borderColor: active === vm.id ? vm.color : "transparent",
-            ringColor: active === vm.id ? vm.color : undefined,
+            boxShadow: active === vm.id ? `0 0 8px ${vm.color}` : "none",
           }}
         >
           <span>{vm.icon}</span>
