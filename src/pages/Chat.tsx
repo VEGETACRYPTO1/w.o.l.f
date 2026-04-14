@@ -186,7 +186,7 @@ export default function Chat() {
               }`}
             >
               {msg.role === "assistant" ? (
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                <ChatMessage content={msg.content} />
               ) : (
                 msg.content
               )}
