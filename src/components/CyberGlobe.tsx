@@ -174,6 +174,9 @@ function ParticleSphere({ colors }: { colors: ModeColorSet }) {
     const t = clock.getElapsedTime();
     if (!ref.current || !originalPositions.current) return;
 
+    // Force-update particle colors every frame
+    applyColors();
+
     const geometry = ref.current.geometry;
     const pos = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
     const orig = originalPositions.current;
@@ -214,7 +217,6 @@ function ParticleSphere({ colors }: { colors: ModeColorSet }) {
     ref.current.rotation.x += 0.0005;
     ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
 
-    // Flicker: modulate per-particle opacity via overall material
     if (matRef.current) {
       matRef.current.opacity = 0.65 + Math.sin(t * 0.7) * 0.12;
     }
