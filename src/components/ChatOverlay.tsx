@@ -276,8 +276,7 @@ export function ChatOverlay() {
                 </form>
               </div>
             </div>
-          </div>
-        </div>
-      </>
+      </div>
+    </>
   );
 }
