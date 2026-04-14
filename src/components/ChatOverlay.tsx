@@ -85,9 +85,12 @@ export function ChatOverlay() {
 
     const modeLabels = ["🧠 Intelligence Mode active.", "⚔️ War Mode activated.", "🧘 Relax Mode activated.", "🔧 Rebuild Mode activated.", "🌱 Expansion Mode activated."];
 
+    const userLocation = (window as any).userLocation;
+
     await streamWolfChat({
       messages: newMessages.filter((m) => !modeLabels.includes(m.content)),
       mode,
+      location: userLocation || undefined,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
       onError: (err) => {
