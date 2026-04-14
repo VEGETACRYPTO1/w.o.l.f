@@ -99,27 +99,31 @@ function setMode(mode: VoiceMode) {
 // ==========================
 
 function wolfSpeak(text: string): Promise<void> {
-  const clean = text
-    .replace(/[*_~`#>]/g, "")
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-    .replace(/🌐|🐺|⚔️|🧠|🧘|🔧|🌱/g, "")
-    .trim();
+   const clean = text
+     .replace(/\./g, "... ")
+     .replace(/,/g, ", ")
+     .replace(/!/g, "! ")
+     .replace(/\?/g, "? ")
+     .replace(/:/g, "... ")
+     .replace(/\n/g, "... ")
+  .trim();
 
   if (!clean) return Promise.resolve();
 
   if (voices.length === 0) {
     loadVoices();
     return new Promise((resolve) => {
-      setTimeout(() => { wolfSpeak(clean).then(resolve); }, 200);
+      wolfSpeak(clean).then(resolve);
     });
   }
 
   try {
     speechSynthesis.cancel();
+    speechSynthesis.pause();
     return new Promise<void>((resolve) => {
       const utter = new SpeechSynthesisUtterance(clean);
-      utter.rate = 1.05;
-      utter.pitch = 0.85;
+      utter.rate = 1.12;
+      utter.pitch = 0.95;
       utter.volume = 1;
       utter.onend = () => resolve();
       utter.onerror = () => resolve();
