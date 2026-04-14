@@ -124,7 +124,12 @@ export function ChatOverlay() {
       mode,
       location: userLocation || undefined,
       onDelta: upsertAssistant,
-      onDone: () => setIsLoading(false),
+      onDone: () => {
+        setIsLoading(false);
+        if (voiceEnabled && assistantSoFar) {
+          speak(assistantSoFar).catch(() => {});
+        }
+      },
       onError: (err) => {
         setIsLoading(false);
         toast.error(err);
