@@ -33,17 +33,17 @@ export function resolveUrl(query: string): string {
   return "https://www.google.com/search?q=" + encodeURIComponent(clean || query);
 }
 
-/** Try auto-open; returns true if succeeded */
+/** Auto-open via location.href — works on all browsers */
 export function tryOpenTab(query: string): boolean {
   const url = resolveUrl(query);
-  const win = window.open(url, "_blank");
-  return !!(win && !win.closed && typeof win.closed !== "undefined");
+  window.location.href = url;
+  return true;
 }
 
 /** Manual fallback open */
 export function openTab(query: string) {
   const url = resolveUrl(query);
-  window.open(url, "_blank");
+  window.location.href = url;
 }
 
 export function handleMemoryAction(
