@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
-import { speak } from "@/lib/wolfVoice";
+import { speak, onModeSwitch, type AppMode } from "@/lib/wolfVoice";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
