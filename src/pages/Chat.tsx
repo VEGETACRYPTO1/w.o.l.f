@@ -13,7 +13,12 @@ function openTab(query: string) {
   const url = query.startsWith("http")
     ? query
     : "https://www.google.com/search?q=" + encodeURIComponent(query);
-  window.open(url, "_blank");
+
+  const newWindow = window.open(url, "_blank");
+
+  if (!newWindow) {
+    window.location.href = url;
+  }
 }
 
 function ChatMessage({ content }: { content: string }) {
