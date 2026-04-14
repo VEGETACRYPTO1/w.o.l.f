@@ -35,7 +35,7 @@ function BloomEffect() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
-      1.2, 0.4, 0.1
+      0.75, 0.4, 0.15
     );
     composer.addPass(bloom);
     composerRef.current = composer;
