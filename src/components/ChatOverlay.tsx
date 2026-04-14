@@ -44,7 +44,7 @@ export function ChatOverlay() {
     });
   }, [setMode]);
 
-
+  const toggleChat = () => {
     setWolfPulse(true);
     setEnergyBurst(true);
     setTimeout(() => setWolfPulse(false), 400);
