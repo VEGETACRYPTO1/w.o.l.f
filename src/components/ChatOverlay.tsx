@@ -68,6 +68,32 @@ export function ChatOverlay() {
     setMessages((prev) => [...prev, { role: "assistant", content: labels[selectedMode] }]);
   };
 
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening()) {
+      stopListening();
+      setVoiceActive(false);
+      return;
+    }
+    if (!isRecognitionSupported()) {
+      toast.error("Speech recognition not supported in this browser.");
+      return;
+    }
+    setVoiceActive(true);
+    const started = startListening((text) => {
+      setVoiceActive(false);
+      setInput(text);
+      // Auto-send after voice input
+      setTimeout(() => {
+        const form = document.querySelector("[data-wolf-form]") as HTMLFormElement;
+        form?.requestSubmit();
+      }, 100);
+    });
+    if (!started) {
+      setVoiceActive(false);
+      toast.error("Could not start microphone.");
+    }
+  }, []);
+
   const send = async () => {
     if (!input.trim() || isLoading) return;
     const userMsg: Msg = { role: "user", content: input.trim() };
