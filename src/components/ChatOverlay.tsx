@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
-import { speak, startHandsFree, stopHandsFree } from "@/lib/wolfVoice";
+import { speak } from "@/lib/wolfVoice";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
@@ -19,7 +19,6 @@ export function ChatOverlay() {
   const [isLoading, setIsLoading] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
-  const isProcessingRef = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,71 +33,9 @@ export function ChatOverlay() {
           lon: pos.coords.longitude,
         };
       },
-      () => {}
+      () => { /* permission denied — fallback handled server-side */ }
     );
   }, []);
-
-  // 🐺 Wire voice system into chat
-  const send = useCallback(async (explicitText?: string) => {
-    const text = explicitText || input.trim();
-    if (!text || isProcessingRef.current) return;
-
-    isProcessingRef.current = true;
-    if (!explicitText) setInput("");
-    setShowModeSelector(false);
-
-    const userMsg: Msg = { role: "user", content: text };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-
-    setIsLoading(true);
-    let assistantSoFar = "";
-    const upsertAssistant = (chunk: string) => {
-      assistantSoFar += chunk;
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant" && prev.length > newMessages.length) {
-          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
-        }
-        return [...prev.slice(0, newMessages.length), { role: "assistant", content: assistantSoFar }];
-      });
-    };
-
-    const modeLabels = ["🧠 Intelligence Mode active.", "⚔️ War Mode activated.", "🧘 Relax Mode activated.", "🔧 Rebuild Mode activated.", "🌱 Expansion Mode activated."];
-    const userLocation = (window as any).userLocation;
-
-    await streamWolfChat({
-      messages: newMessages.filter((m) => !modeLabels.includes(m.content)),
-      mode,
-      location: userLocation || undefined,
-      onDelta: upsertAssistant,
-      onDone: () => {
-        setIsLoading(false);
-        isProcessingRef.current = false;
-        if (assistantSoFar) {
-          setTimeout(() => speak(assistantSoFar), 50);
-        }
-      },
-      onError: (err) => {
-        setIsLoading(false);
-        isProcessingRef.current = false;
-        toast.error(err);
-      },
-    });
-  }, [input, messages, mode]);
-
-  // 🎤 Voice → Chat bridge
-  useEffect(() => {
-    startHandsFree(
-      () => setOpen(true), // onWake: auto-open chat
-      (text) => {
-        // onCommand: interrupt speech + send
-        speechSynthesis.cancel();
-        send(text);
-      }
-    );
-    return () => stopHandsFree();
-  }, [send]);
 
   const toggleChat = () => {
     setWolfPulse(true);
@@ -126,7 +63,52 @@ export function ChatOverlay() {
     setMessages((prev) => [...prev, { role: "assistant", content: labels[selectedMode] }]);
   };
 
+  const send = async () => {
+    if (!input.trim() || isLoading) return;
+    const userMsg: Msg = { role: "user", content: input.trim() };
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
+    setShowModeSelector(false);
+
+    setIsLoading(true);
+    let assistantSoFar = "";
+    const upsertAssistant = (chunk: string) => {
+      assistantSoFar += chunk;
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && prev.length > newMessages.length) {
+          return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
+        }
+        return [...prev.slice(0, newMessages.length), { role: "assistant", content: assistantSoFar }];
+      });
+    };
+
+    const modeLabels = ["🧠 Intelligence Mode active.", "⚔️ War Mode activated.", "🧘 Relax Mode activated.", "🔧 Rebuild Mode activated.", "🌱 Expansion Mode activated."];
+
+    const userLocation = (window as any).userLocation;
+
+    await streamWolfChat({
+      messages: newMessages.filter((m) => !modeLabels.includes(m.content)),
+      mode,
+      location: userLocation || undefined,
+      onDelta: upsertAssistant,
+      onDone: () => {
+        setIsLoading(false);
+        // 🔊 ALWAYS SPEAK
+        if (assistantSoFar) {
+          setTimeout(() => (window as any).wolfSpeak?.(assistantSoFar) || speak(assistantSoFar), 50);
+        }
+      },
+      onError: (err) => {
+        setIsLoading(false);
+        toast.error(err);
+      },
+    });
+  };
+
   const renderContent = (content: string) => {
+    // Detect clickable open links: 🌐 [Open: query](search:query)
     const linkRegex = /🌐 \[Open: (.+?)\]\(search:(.+?)\)/g;
     const match = linkRegex.exec(content);
     if (match) {
@@ -147,6 +129,7 @@ export function ChatOverlay() {
     <>
       {/* Wolf button with energy burst */}
       <div className="fixed bottom-6 right-6 z-50">
+        {/* Energy burst ring */}
         <div
           style={{
             position: "absolute",
@@ -214,7 +197,7 @@ export function ChatOverlay() {
                 <span className="text-sm font-bold tracking-wider text-foreground">W.O.L.F</span>
               </div>
 
-              {/* Mode selector */}
+              {/* Mode selector (only visible when wolf logo clicked) */}
               <AnimatePresence>
                 {showModeSelector && (
                   <motion.div
