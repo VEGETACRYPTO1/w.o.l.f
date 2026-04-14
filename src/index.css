@@ -59,6 +59,9 @@
     --glow-primary: 42 65% 50%;
     --glow-opacity: 0.12;
     --glow-spread: 40px;
+
+    /* Wolf globe glow */
+    --wolf-glow: #ffd700;
   }
 
   [data-mode="intelligence"] {
@@ -71,29 +74,14 @@
     --glow-primary: 42 65% 50%;
     --glow-opacity: 0.12;
     --glow-spread: 40px;
+    --wolf-glow: #ffd700;
   }
 
   [data-mode="war"] {
     --background: 0 20% 5%;
-    --card: 0 18% 8%;
-    --secondary: 0 15% 12%;
-    --muted: 0 15% 12%;
-    --accent: 0 15% 15%;
-    --border: 0 15% 14%;
-    --input: 0 15% 14%;
-    --primary: 0 72% 55%;
-    --primary-foreground: 0 0% 100%;
-    --ring: 0 72% 55%;
-    --sidebar-background: 0 20% 5%;
-    --sidebar-foreground: 0 14% 55%;
-    --sidebar-primary: 0 72% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-ring: 0 72% 55%;
-    --sidebar-accent: 0 15% 10%;
-    --sidebar-border: 0 15% 10%;
-    --glow-primary: 0 72% 55%;
-    --glow-opacity: 0.2;
+...
     --glow-spread: 80px;
+    --wolf-glow: #ff3b3b;
   }
 
   [data-mode="rebuild"] {
@@ -137,6 +125,14 @@
     --glow-primary: 160 100% 50%;
     --glow-opacity: 0.1;
     --glow-spread: 40px;
+    --wolf-glow: #00ffc6;
+  }
+
+  /* Globe canvas glow */
+  canvas {
+    filter: drop-shadow(0 0 12px var(--wolf-glow))
+            drop-shadow(0 0 25px var(--wolf-glow));
+    transition: filter 0.5s ease;
   }
 }
 
