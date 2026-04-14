@@ -1,12 +1,16 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, X, User, Swords, Leaf, Brain } from "lucide-react";
+import { Send, X, User, Swords, Leaf, Brain, Mic, MicOff, Volume2 } from "lucide-react";
 import { useMode, type Mode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
+import {
+  speak, stopSpeaking, getIsSpeaking,
+  startListening, stopListening, isListening, isRecognitionSupported,
+} from "@/lib/wolfVoice";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
