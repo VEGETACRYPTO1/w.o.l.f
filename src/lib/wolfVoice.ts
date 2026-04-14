@@ -88,6 +88,9 @@ function setMode(mode: VoiceMode) {
     });
   }
 
+  // 🔥 Notify React context
+  onModeChangeCallback?.(mode);
+
   console.log("MODE:", mode);
 }
 
