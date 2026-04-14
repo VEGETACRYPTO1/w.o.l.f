@@ -64,6 +64,11 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
     setModeState(newMode);
     localStorage.setItem("jarvis-mode", newMode);
     document.documentElement.setAttribute("data-mode", newMode);
+    // Sync voice system (CSS vars, body classes, globe)
+    const voiceModes: VoiceMode[] = ["intelligence", "war", "relax"];
+    if (voiceModes.includes(newMode as VoiceMode)) {
+      setVoiceMode(newMode as VoiceMode);
+    }
   }, []);
 
   // Bridge voice system mode changes to React state
