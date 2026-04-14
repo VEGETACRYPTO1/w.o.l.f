@@ -24,6 +24,21 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
   loadVoices();
 }
 
+// ─── Voice Selection API ───
+
+export function getAvailableVoices(): SpeechSynthesisVoice[] {
+  return speechSynthesis.getVoices().filter((v) => v.lang.startsWith("en"));
+}
+
+export function getSelectedVoice(): SpeechSynthesisVoice | null {
+  return selectedVoice;
+}
+
+export function setVoice(voice: SpeechSynthesisVoice) {
+  selectedVoice = voice;
+  voicesLoaded = true;
+}
+
 // ─── Public API ───
 
 export function getIsSpeaking() {
