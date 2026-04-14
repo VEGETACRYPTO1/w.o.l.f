@@ -127,9 +127,13 @@ export function ChatOverlay() {
           opacity: open ? 1 : 0,
           transform: open ? "translateY(0px) scale(1)" : "translateY(30px) scale(0.9)",
           transformOrigin: "bottom right",
-          pointerEvents: open ? "auto" : "none",
+          pointerEvents: open ? "auto" as const : "none" as const,
           transition: "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease",
+          boxShadow: open
+            ? "0 0 20px hsl(var(--glow-primary) / 0.2), 0 0 60px hsl(var(--glow-primary) / 0.08)"
+            : "none",
         }}
+      >
           >
             <div
               className="rounded-xl overflow-hidden flex flex-col"
