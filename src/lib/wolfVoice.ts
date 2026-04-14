@@ -4,20 +4,16 @@
 
 export type VoiceMode = "intelligence" | "war" | "relax";
 
+let onModeChangeCallback: ((mode: VoiceMode) => void) | null = null;
+export function onModeChange(cb: (mode: VoiceMode) => void) { onModeChangeCallback = cb; }
+
 let recognition: any = null;
 let _isListening = false;
 let isAwake = false;
 let isProcessing = false;
 let currentMode: VoiceMode = "intelligence";
-
 let wakeWordCallback: (() => void) | null = null;
 let commandCallback: ((text: string) => void) | null = null;
-let messageCallback: ((text: string, role: "user" | "ai") => void) | null = null;
-let onModeChangeCallback: ((mode: VoiceMode) => void) | null = null;
-
-export function onModeChange(cb: (mode: VoiceMode) => void) {
-  onModeChangeCallback = cb;
-}
 
 // ==========================
 // 🔊 SPEAK (INTERRUPT SAFE)
@@ -43,6 +39,18 @@ export function speak(text: string): Promise<void> {
 }
 
 // ==========================
+// 🐺 WAKE
+// ==========================
+
+function wakeWolf() {
+  isAwake = true;
+  wakeWordCallback?.();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  speak(`${greeting}, SK. W.O.L.F online.`);
+}
+
+// ==========================
 // 🎯 MODE SWITCH
 // ==========================
 
@@ -58,64 +66,49 @@ function setMode(mode: VoiceMode) {
     intelligence: "#ffd700",
   };
   document.documentElement.style.setProperty("--wolf-glow", colorMap[mode]);
+
   onModeChangeCallback?.(mode);
+  speak(`${mode} mode`);
 }
 
 // ==========================
-// 🐺 HANDLE WAKE
+// 🧠 PROCESS VOICE
 // ==========================
 
-function handleWake(text: string): boolean {
-  const lower = text.toLowerCase();
-  if (
-    lower.includes("hey wolf") ||
-    lower.includes("wake up") ||
-    lower.includes("hello wolf")
-  ) {
-    isAwake = true;
-    wakeWordCallback?.();
-    const hour = new Date().getHours();
-    const greeting =
-      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-    const msg = `${greeting}, SK. W.O.L.F online.`;
-    messageCallback?.(msg, "ai");
-    speak(msg);
-    return true;
+async function processVoice(text: string) {
+  const t = text.toLowerCase();
+  console.log("🎤 Heard:", t);
+
+  // Wake gate
+  if (!isAwake) {
+    if (t.includes("hey wolf") || t.includes("wake up") || t.includes("hello wolf")) {
+      wakeWolf();
+    }
+    return;
   }
-  return false;
+
+  // Mode switch
+  if (t.includes("war mode")) return setMode("war");
+  if (t.includes("relax mode")) return setMode("relax");
+  if (t.includes("intelligence mode")) return setMode("intelligence");
+
+  // Processing guard
+  if (isProcessing) {
+    console.log("⚠️ Skipping (busy)");
+    return;
+  }
+  isProcessing = true;
+
+  // Send to command handler (ChatOverlay)
+  if (commandCallback) {
+    commandCallback(text);
+  }
+
+  isProcessing = false;
 }
 
 // ==========================
-// ⚔️ HANDLE COMMAND
-// ==========================
-
-function handleCommand(text: string): boolean {
-  const lower = text.toLowerCase();
-
-  if (lower.includes("war mode")) {
-    setMode("war");
-    messageCallback?.("⚔️ War Mode activated.", "ai");
-    speak("War mode activated");
-    return true;
-  }
-  if (lower.includes("relax mode")) {
-    setMode("relax");
-    messageCallback?.("🧘 Relax Mode activated.", "ai");
-    speak("Relax mode activated");
-    return true;
-  }
-  if (lower.includes("intelligence mode")) {
-    setMode("intelligence");
-    messageCallback?.("🧠 Intelligence Mode activated.", "ai");
-    speak("Intelligence mode activated");
-    return true;
-  }
-
-  return false;
-}
-
-// ==========================
-// 🎤 LISTEN (ROBUST ERROR RECOVERY)
+// 🎤 LISTEN (OPTIMIZED)
 // ==========================
 
 export function isRecognitionSupported(): boolean {
@@ -123,73 +116,35 @@ export function isRecognitionSupported(): boolean {
 }
 
 function _startListening() {
-  if (!isRecognitionSupported()) {
-    console.error("Speech recognition not supported");
-    return;
-  }
-
+  if (!isRecognitionSupported()) return;
   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
   recognition = new SR();
   recognition.continuous = true;
   recognition.interimResults = false;
   recognition.lang = "en-US";
 
-  recognition.onstart = () => {
-    console.log("🎤 Listening started");
-    _isListening = true;
-  };
-
   recognition.onresult = async (event: any) => {
-    const text = event.results[event.results.length - 1][0].transcript.trim();
-    console.log("🎤 Heard:", text);
+    const last = event.results[event.results.length - 1];
+    if (!last.isFinal) return;
+    const text = last[0].transcript.trim();
 
     // 🔥 INTERRUPT AI SPEECH
     speechSynthesis.cancel();
 
-    // 🐺 WAKE SYSTEM
-    if (!isAwake) {
-      handleWake(text);
-      return;
-    }
-
-    // ⚔️ MODE COMMANDS
-    if (handleCommand(text)) return;
-
-    // 🧠 NORMAL CHAT
-    if (!isProcessing && commandCallback) {
-      isProcessing = true;
-      await commandCallback(text);
-      isProcessing = false;
-    }
-  };
-
-  recognition.onerror = (e: any) => {
-    console.log("❌ Recognition error:", e);
-    // 🔥 HARD RESET
-    try { recognition.stop(); } catch {}
-    setTimeout(() => {
-      _startListening();
-    }, 500);
+    await processVoice(text);
   };
 
   recognition.onend = () => {
-    console.log("⚠️ Recognition ended → restarting...");
-    // 🔥 ALWAYS RESTART
-    setTimeout(() => {
-      try {
-        recognition.start();
-      } catch {
-        _startListening();
-      }
-    }, 300);
+    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 100);
   };
 
-  try {
-    recognition.start();
-  } catch {
-    console.log("Restart failed, retrying...");
-    setTimeout(_startListening, 500);
-  }
+  recognition.onerror = () => {
+    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 300);
+  };
+
+  recognition.start();
+  _isListening = true;
+  console.log("🎤 Always listening");
 }
 
 // Auto-start on first click (browser requirement)
@@ -213,15 +168,10 @@ export function testVoice() { speak("W.O.L.F fully operational, SK."); }
 export function isWolfActive() { return isAwake; }
 export function isListening(): boolean { return _isListening; }
 
-export function startHandsFree(
-  onWake: () => void,
-  onCommand: (text: string) => void,
-  onMessage?: (text: string, role: "user" | "ai") => void
-): boolean {
+export function startHandsFree(onWake: () => void, onCommand: (text: string) => void): boolean {
   if (!isRecognitionSupported()) return false;
   wakeWordCallback = onWake;
   commandCallback = onCommand;
-  messageCallback = onMessage || null;
   return true;
 }
 
@@ -229,19 +179,11 @@ export function stopHandsFree() {
   isAwake = false;
   wakeWordCallback = null;
   commandCallback = null;
-  messageCallback = null;
-  if (recognition) {
-    try { recognition.stop(); } catch {}
-    recognition = null;
-    _isListening = false;
-  }
+  if (recognition) { try { recognition.stop(); } catch {} recognition = null; _isListening = false; }
 }
 
 export function stopListening() { stopHandsFree(); }
-export function startListening(onResult: (text: string) => void): boolean {
-  commandCallback = onResult;
-  return true;
-}
+export function startListening(onResult: (text: string) => void): boolean { commandCallback = onResult; return true; }
 
 // ==========================
 // 🔊 REPLAY
