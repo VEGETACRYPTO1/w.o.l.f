@@ -1,16 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, X, User, Swords, Leaf, Brain, Mic, MicOff, Volume2 } from "lucide-react";
+import { Send, X, User, Swords, Leaf, Brain } from "lucide-react";
 import { useMode, type Mode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
-import {
-  speak, stopSpeaking, getIsSpeaking,
-  startListening, stopListening, isListening, isRecognitionSupported,
-} from "@/lib/wolfVoice";
+import { speak } from "@/lib/wolfVoice";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
@@ -21,8 +18,6 @@ export function ChatOverlay() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
-  const [voiceActive, setVoiceActive] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -68,32 +63,6 @@ export function ChatOverlay() {
     setMessages((prev) => [...prev, { role: "assistant", content: labels[selectedMode] }]);
   };
 
-  const handleVoiceToggle = useCallback(() => {
-    if (isListening()) {
-      stopListening();
-      setVoiceActive(false);
-      return;
-    }
-    if (!isRecognitionSupported()) {
-      toast.error("Speech recognition not supported in this browser.");
-      return;
-    }
-    setVoiceActive(true);
-    const started = startListening((text) => {
-      setVoiceActive(false);
-      setInput(text);
-      // Auto-send after voice input
-      setTimeout(() => {
-        const form = document.querySelector("[data-wolf-form]") as HTMLFormElement;
-        form?.requestSubmit();
-      }, 100);
-    });
-    if (!started) {
-      setVoiceActive(false);
-      toast.error("Could not start microphone.");
-    }
-  }, []);
-
   const send = async () => {
     if (!input.trim() || isLoading) return;
     const userMsg: Msg = { role: "user", content: input.trim() };
@@ -126,8 +95,9 @@ export function ChatOverlay() {
       onDelta: upsertAssistant,
       onDone: () => {
         setIsLoading(false);
-        if (voiceEnabled && assistantSoFar) {
-          speak(assistantSoFar).catch(() => {});
+        // 🔊 ALWAYS SPEAK
+        if (assistantSoFar) {
+          setTimeout(() => (window as any).wolfSpeak?.(assistantSoFar) || speak(assistantSoFar), 50);
         }
       },
       onError: (err) => {
@@ -331,38 +301,6 @@ export function ChatOverlay() {
               {/* Input */}
               <div className="p-3 border-t" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
                 <form data-wolf-form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-2">
-                  {/* Voice toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setVoiceEnabled((v) => !v)}
-                    className="h-8 w-8 rounded-md flex items-center justify-center transition-all shrink-0"
-                    style={{
-                      background: voiceEnabled ? "hsl(var(--primary) / 0.2)" : "rgba(255,255,255,0.05)",
-                      border: voiceEnabled ? "1px solid hsl(var(--primary) / 0.4)" : "1px solid transparent",
-                    }}
-                    title={voiceEnabled ? "Voice responses ON" : "Voice responses OFF"}
-                  >
-                    <Volume2 className={`h-3.5 w-3.5 ${voiceEnabled ? "text-primary" : "text-muted-foreground"}`} />
-                  </button>
-                  {/* Mic button */}
-                  <button
-                    type="button"
-                    onClick={handleVoiceToggle}
-                    disabled={isLoading}
-                    className="h-8 w-8 rounded-md flex items-center justify-center transition-all shrink-0"
-                    style={{
-                      background: voiceActive ? "hsl(var(--primary) / 0.3)" : "rgba(255,255,255,0.05)",
-                      border: voiceActive ? "1px solid hsl(var(--primary) / 0.5)" : "1px solid transparent",
-                      animation: voiceActive ? "wolfPulse 1s ease infinite" : "none",
-                    }}
-                    title="Voice input"
-                  >
-                    {voiceActive ? (
-                      <MicOff className="h-3.5 w-3.5 text-primary" />
-                    ) : (
-                      <Mic className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                  </button>
                   <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}

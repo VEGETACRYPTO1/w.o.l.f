@@ -179,7 +179,12 @@ export default function Chat() {
       ),
       mode,
       onDelta: upsertAssistant,
-      onDone: () => setIsLoading(false),
+      onDone: () => {
+        setIsLoading(false);
+        if (assistantSoFar) {
+          setTimeout(() => (window as any).wolfSpeak?.(assistantSoFar) || speak(assistantSoFar), 50);
+        }
+      },
       onError: (err) => {
         setIsLoading(false);
         toast.error(err);
