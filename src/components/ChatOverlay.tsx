@@ -10,6 +10,7 @@ import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
+  const [wolfPulse, setWolfPulse] = useState(false);
   const { mode, setMode } = useMode();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -20,6 +21,12 @@ export function ChatOverlay() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const toggleChat = () => {
+    setWolfPulse(true);
+    setTimeout(() => setWolfPulse(false), 400);
+    setTimeout(() => setOpen((v) => !v), 100);
+  };
 
   const handleWolfClick = () => {
     setShowModeSelector((v) => !v);
