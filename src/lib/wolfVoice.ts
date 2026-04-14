@@ -60,6 +60,49 @@ if (typeof window !== "undefined") {
 // 🔊 SPEAK (FAST + INTERRUPT)
 // ==========================
 
+// Voice profiles per mode
+const VOICE_PROFILES: Record<VoiceMode, { rate: number; pitch: number; preferredVoices: string[] }> = {
+  intelligence: {
+    rate: 0.95,
+    pitch: 0.65,
+    preferredVoices: [
+      "Google US English",
+      "Microsoft David",
+      "Alex",
+      "Daniel",
+    ],
+  },
+  jarvis: {
+    rate: 1.0,
+    pitch: 0.8,
+    preferredVoices: ["Google UK English Male", "Daniel", "Microsoft David"],
+  },
+  friday: {
+    rate: 1.05,
+    pitch: 1.1,
+    preferredVoices: ["Google US English", "Samantha", "Microsoft Zira", "Karen"],
+  },
+  robot: {
+    rate: 0.85,
+    pitch: 0.4,
+    preferredVoices: ["Google US English", "Microsoft David", "Alex"],
+  },
+};
+
+function selectVoice(): SpeechSynthesisVoice | undefined {
+  const profile = VOICE_PROFILES[currentVoiceMode];
+  for (const pref of profile.preferredVoices) {
+    const match = voices.find((v) => v.name.includes(pref));
+    if (match) return match;
+  }
+  // Fallback: any American English voice
+  return (
+    voices.find((v) => v.lang === "en-US") ||
+    voices.find((v) => v.lang.startsWith("en")) ||
+    voices[0]
+  );
+}
+
 function wolfSpeak(text: string): Promise<void> {
   const clean = text
     .replace(/[*_~`#>]/g, "")
@@ -80,16 +123,15 @@ function wolfSpeak(text: string): Promise<void> {
     speechSynthesis.cancel();
     isSpeaking = true;
 
+    const profile = VOICE_PROFILES[currentVoiceMode];
+
     return new Promise<void>((resolve) => {
       const utter = new SpeechSynthesisUtterance(clean);
-      const voice =
-        voices.find((v) => v.name.includes("Google")) ||
-        voices.find((v) => v.lang.includes("en")) ||
-        voices[0];
+      const voice = selectVoice();
 
       if (voice) utter.voice = voice;
-      utter.rate = 1.05;
-      utter.pitch = 0.9;
+      utter.rate = profile.rate;
+      utter.pitch = profile.pitch;
       utter.volume = 1;
 
       utter.onend = () => { isSpeaking = false; resolve(); };
