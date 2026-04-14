@@ -1,5 +1,5 @@
 // ==========================
-// 🐺 W.O.L.F FINAL FIXED SYSTEM
+// 🐺 W.O.L.F FINAL MASTER SYSTEM
 // ==========================
 
 export type VoiceMode = "intelligence" | "war" | "relax";
@@ -31,13 +31,12 @@ function getBestVoice(): SpeechSynthesisVoice | undefined {
   return (
     voices.find(v => v.name.includes("Google UK English Male")) ||
     voices.find(v => v.name.includes("Samantha")) ||
-    voices.find(v => v.lang === "en-US") ||
     voices[0]
   );
 }
 
 // ==========================
-// 🔓 UNLOCK AUDIO
+// 🔓 UNLOCK AUDIO (CRITICAL)
 // ==========================
 
 function unlockAudio() {
@@ -105,22 +104,49 @@ function wolfSpeak(text: string): Promise<void> {
   }
 }
 
-// Register globally
 if (typeof window !== "undefined") {
   (window as any).wolfSpeak = wolfSpeak;
 }
 
 // ==========================
-// 🐺 WAKE WORD (ONCE)
+// 🌍 GLOBE COLOR CONTROL
+// ==========================
+
+function updateGlobeColor() {
+  let color: number;
+  if (currentMode === "war") {
+    color = 0xff3b3b;
+  } else if (currentMode === "relax") {
+    color = 0x00ffc6;
+  } else {
+    color = 0xffd700;
+  }
+
+  const w = window as any;
+  if (w.globeParticles) w.globeParticles.material.color.setHex(color);
+  if (w.globeLines) w.globeLines.material.color.setHex(color);
+  if (w.globeGlow) w.globeGlow.material.color.setHex(color);
+  console.log("🌍 Globe updated:", currentMode);
+}
+
+// ==========================
+// 🎨 APPLY MODE UI + GLOBE
+// ==========================
+
+function applyModeUI() {
+  document.body.className = document.body.className.replace(/mode-\w+/g, "").trim();
+  document.body.classList.add(`mode-${currentMode}`);
+  document.documentElement.setAttribute("data-mode", currentMode);
+  updateGlobeColor();
+}
+
+// ==========================
+// 🐺 WAKE SYSTEM
 // ==========================
 
 function handleWakeWord(text: string): boolean {
-  const lower = text.toLowerCase();
-  if (
-    !lower.includes("hey wolf") &&
-    !lower.includes("wake up") &&
-    !lower.includes("hello wolf")
-  ) return false;
+  const t = text.toLowerCase();
+  if (!t.includes("hey wolf") && !t.includes("wake up") && !t.includes("hello wolf")) return false;
 
   isAwake = true;
   wakeWordCallback?.();
@@ -131,27 +157,27 @@ function handleWakeWord(text: string): boolean {
 }
 
 // ==========================
-// ⚔️ MODE SWITCH
+// ⚔️ MODE SWITCH (VOICE)
 // ==========================
 
 function handleModeSwitch(text: string): boolean {
-  const lower = text.toLowerCase();
-  if (lower.includes("war mode")) {
+  const t = text.toLowerCase();
+  if (t.includes("war mode")) {
     currentMode = "war";
-  } else if (lower.includes("relax mode")) {
+  } else if (t.includes("relax mode")) {
     currentMode = "relax";
-  } else if (lower.includes("intelligence mode")) {
+  } else if (t.includes("intelligence mode")) {
     currentMode = "intelligence";
   } else {
     return false;
   }
-  document.documentElement.setAttribute("data-mode", currentMode);
-  wolfSpeak(`${currentMode} mode activated.`).catch(() => {});
+  applyModeUI();
+  wolfSpeak(`${currentMode} mode activated`).catch(() => {});
   return true;
 }
 
 // ==========================
-// 🎤 LISTEN SYSTEM (FIXED)
+// 🎤 LISTEN SYSTEM
 // ==========================
 
 export function isRecognitionSupported(): boolean {
@@ -170,19 +196,17 @@ function _autoStartListening() {
     const text = event.results[event.results.length - 1][0].transcript.trim();
     console.log("🎤 Heard:", text);
 
-    // 🐺 FIRST: WAKE SYSTEM
+    // 🐺 WAKE
     if (!isAwake) {
       handleWakeWord(text);
       return;
     }
 
-    // ⚔️ MODE SWITCH
+    // 🎯 MODE SWITCH
     if (handleModeSwitch(text)) return;
 
-    // 🧠 NORMAL FLOW → pass to command callback
-    if (commandCallback) {
-      commandCallback(text);
-    }
+    // 🧠 NORMAL FLOW
+    if (commandCallback) commandCallback(text);
   };
 
   recognition.onend = () => {
@@ -205,7 +229,7 @@ export const speak = wolfSpeak;
 export function getIsSpeaking() { return false; }
 export function stopSpeaking() { speechSynthesis.cancel(); }
 export function getCurrentVoiceMode(): VoiceMode { return currentMode; }
-export function setVoiceMode(mode: VoiceMode) { currentMode = mode; wolfSpeak(`Voice mode set to ${mode}`); }
+export function setVoiceMode(mode: VoiceMode) { currentMode = mode; applyModeUI(); wolfSpeak(`${mode} mode activated`); }
 export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
 export function isWolfActive() { return isAwake; }
 export function isListening(): boolean { return _isListening; }
@@ -235,4 +259,14 @@ export function replayLast() {
   const messages = document.querySelectorAll(".ai-message");
   const last = messages[messages.length - 1];
   if (last) wolfSpeak(last.textContent || "");
+}
+
+// ==========================
+// 🚀 AUTO START
+// ==========================
+
+if (typeof window !== "undefined") {
+  window.addEventListener("load", () => {
+    applyModeUI();
+  });
 }
