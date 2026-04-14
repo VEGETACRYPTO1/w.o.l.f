@@ -19,9 +19,21 @@ export function saveMemory(memory: WolfMemory) {
 }
 
 function openTab(query: string) {
-  const url = query.startsWith("http")
-    ? query
-    : `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+  const q = query.toLowerCase();
+  let url = "";
+
+  if (q.includes("youtube")) {
+    const search = q.replace("open", "").replace("youtube", "").trim();
+    url = search
+      ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(search)
+      : "https://www.youtube.com";
+  } else if (q.includes("google") || q.includes("search")) {
+    const search = q.replace("search", "").replace("google", "").trim();
+    url = "https://www.google.com/search?q=" + encodeURIComponent(search);
+  } else {
+    url = "https://www.google.com/search?q=" + encodeURIComponent(query);
+  }
+
   window.open(url, "_blank");
 }
 
