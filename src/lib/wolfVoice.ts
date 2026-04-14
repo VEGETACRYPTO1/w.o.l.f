@@ -4,6 +4,10 @@
 
 export type VoiceMode = "intelligence" | "war" | "relax";
 
+// Global mode change listener (React bridge)
+let onModeChangeCallback: ((mode: VoiceMode) => void) | null = null;
+export function onModeChange(cb: (mode: VoiceMode) => void) { onModeChangeCallback = cb; }
+
 let voices: SpeechSynthesisVoice[] = [];
 let audioReady = false;
 let isAwake = false;
