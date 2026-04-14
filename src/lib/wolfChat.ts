@@ -24,6 +24,21 @@ export async function streamWolfChat({
   onAction?: (label: string) => void;
 }) {
   try {
+    // Handle time/date queries client-side — never use API
+    const lastMsg = messages[messages.length - 1]?.content?.toLowerCase() || "";
+    if (/\btime\b|what time|current time/.test(lastMsg)) {
+      const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      onDelta(`${time}. System synchronized.`);
+      onDone();
+      return;
+    }
+    if (/\bdate\b|what date|today|what day/.test(lastMsg)) {
+      const date = new Date().toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+      onDelta(date);
+      onDone();
+      return;
+    }
+
     const memory = getMemory();
 
     const resp = await fetch(CHAT_URL, {
