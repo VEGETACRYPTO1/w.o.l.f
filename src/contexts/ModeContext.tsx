@@ -71,11 +71,13 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Bridge voice system mode changes to React state
+  // Bridge voice system mode changes to React state (voice-initiated only)
   useEffect(() => {
     onModeChange((voiceMode) => {
       if (voiceMode === "intelligence" || voiceMode === "war" || voiceMode === "relax") {
+        // Only update React state, don't call setMode to avoid loop
         setModeState(voiceMode);
+        document.documentElement.setAttribute("data-mode", voiceMode);
       }
     });
   }, []);
