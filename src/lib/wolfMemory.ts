@@ -18,7 +18,7 @@ export function saveMemory(memory: WolfMemory) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(memory));
 }
 
-function openTab(query: string) {
+export function openTab(query: string) {
   const url = query.startsWith("http")
     ? query
     : "https://www.google.com/search?q=" + encodeURIComponent(query);
