@@ -102,27 +102,34 @@ export function ChatOverlay() {
   return (
     <>
       <button
-        onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-110"
+        onClick={toggleChat}
+        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110"
         style={{
           background: "rgba(0,0,0,0.7)",
           border: "1px solid hsl(var(--primary) / 0.4)",
-          boxShadow: "0 0 20px hsl(var(--primary) / 0.3)",
+          boxShadow: open
+            ? "0 0 25px hsl(var(--primary) / 0.5)"
+            : "0 0 20px hsl(var(--primary) / 0.3)",
           backdropFilter: "blur(10px)",
+          transition: "transform 0.2s ease, box-shadow 0.3s ease",
+          animation: wolfPulse ? "wolfPulse 0.4s ease" : "none",
         }}
       >
         {open ? <X className="h-6 w-6 text-primary" /> : <span className="text-2xl">🐺</span>}
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="fixed bottom-24 z-50"
-            style={{ left: "50%", transform: "translateX(-50%)", width: "min(500px, calc(100vw - 40px))" }}
+      <div
+        className="fixed z-50"
+        style={{
+          bottom: "100px",
+          right: "40px",
+          width: "min(500px, calc(100vw - 80px))",
+          opacity: open ? 1 : 0,
+          transform: open ? "translateY(0px) scale(1)" : "translateY(30px) scale(0.9)",
+          transformOrigin: "bottom right",
+          pointerEvents: open ? "auto" : "none",
+          transition: "transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease",
+        }}
           >
             <div
               className="rounded-xl overflow-hidden flex flex-col"
