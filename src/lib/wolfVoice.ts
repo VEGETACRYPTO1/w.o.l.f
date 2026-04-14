@@ -75,6 +75,30 @@ export async function speak(text: string): Promise<void> {
   }
 }
 
+// ─── Browser TTS Fallback ───
+
+function speakFallback(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (!window.speechSynthesis) {
+      isSpeaking = false;
+      resolve();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 0.9;
+    utterance.onend = () => {
+      isSpeaking = false;
+      resolve();
+    };
+    utterance.onerror = () => {
+      isSpeaking = false;
+      resolve();
+    };
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 // ─── Speech Recognition (STT) ───
 
 let recognition: any = null;
