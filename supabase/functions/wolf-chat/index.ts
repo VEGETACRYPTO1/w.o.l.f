@@ -233,6 +233,13 @@ serve(async (req) => {
         });
       }
 
+      // openWebsite action — client opens a new tab
+      if (name === "openWebsite") {
+        return new Response(JSON.stringify({ action: "openWebsite", data: args }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // getTasks — build response from memory passed by client
       if (name === "getTasks") {
         const parts: string[] = [];
