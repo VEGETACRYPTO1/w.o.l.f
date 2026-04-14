@@ -11,6 +11,7 @@ import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
   const [wolfPulse, setWolfPulse] = useState(false);
+  const [energyBurst, setEnergyBurst] = useState(false);
   const { mode, setMode } = useMode();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -22,10 +23,25 @@ export function ChatOverlay() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Geolocation on mount
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => {
+        (window as any).userLocation = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+        };
+      },
+      () => { /* permission denied — fallback handled server-side */ }
+    );
+  }, []);
+
   const toggleChat = () => {
     setWolfPulse(true);
+    setEnergyBurst(true);
     setTimeout(() => setWolfPulse(false), 400);
-    setTimeout(() => setOpen((v) => !v), 100);
+    setTimeout(() => setEnergyBurst(false), 400);
+    setTimeout(() => setOpen((v) => !v), 120);
   };
 
   const handleWolfClick = () => {
