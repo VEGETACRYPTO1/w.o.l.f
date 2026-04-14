@@ -1,13 +1,13 @@
 // ==========================
-// 🔊 W.O.L.F MULTI-VOICE SYSTEM (FREE)
+// 🐺 W.O.L.F COMPLETE VOICE SYSTEM
 // ==========================
 
 let voices: SpeechSynthesisVoice[] = [];
 let voiceReady = false;
 let isSpeaking = false;
-let currentVoiceMode: VoiceMode = "jarvis";
 
 export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
+let currentVoiceMode: VoiceMode = "jarvis";
 
 // ==========================
 // 🔥 LOAD VOICES
@@ -30,69 +30,33 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
 // 🔓 UNLOCK AUDIO (iPhone FIX)
 // ==========================
 
-let audioUnlocked = false;
-
-function unlockAudio() {
-  if (audioUnlocked) return;
-  try {
-    speechSynthesis.resume();
-    const u = new SpeechSynthesisUtterance(" ");
-    speechSynthesis.speak(u);
-    speechSynthesis.cancel();
-    audioUnlocked = true;
-    console.log("🔓 Audio unlocked");
-  } catch (e) {}
-}
-
 if (typeof window !== "undefined") {
   document.body?.addEventListener("click", () => {
-    unlockAudio();
-    speechSynthesis.resume();
+    try {
+      speechSynthesis.resume();
+      const u = new SpeechSynthesisUtterance(" ");
+      speechSynthesis.speak(u);
+      speechSynthesis.cancel();
+      console.log("🔓 Audio unlocked");
+    } catch (e) {}
   }, { once: true });
 }
 
 // ==========================
-// 🎭 VOICE MODES
+// 🎭 VOICE MODE (JARVIS DEFAULT)
 // ==========================
 
-function getVoiceConfig(mode: VoiceMode) {
+function getVoiceConfig() {
   const v = voices;
-  switch (mode) {
-    case "jarvis":
-      return {
-        voice:
-          v.find((x) => x.name.includes("Google UK English Male")) ||
-          v.find((x) => x.name.includes("Daniel")) ||
-          v.find((x) => x.lang.includes("en")),
-        rate: 0.95,
-        pitch: 0.75,
-      };
-    case "friday":
-      return {
-        voice:
-          v.find((x) => x.name.includes("Google UK English Female")) ||
-          v.find((x) => x.name.includes("Samantha")) ||
-          v.find((x) => x.lang.includes("en")),
-        rate: 1.05,
-        pitch: 1.2,
-      };
-    case "robot":
-      return {
-        voice: v.find((x) => x.lang.includes("en")) || v[0],
-        rate: 0.85,
-        pitch: 0.6,
-      };
-    case "intelligence":
-      return {
-        voice:
-          v.find((x) => x.name.includes("Google")) ||
-          v.find((x) => x.lang.includes("en")),
-        rate: 1.0,
-        pitch: 0.9,
-      };
-    default:
-      return { voice: v[0], rate: 1, pitch: 1 };
-  }
+  return {
+    voice:
+      v.find((x) => x.name.includes("Google UK English Male")) ||
+      v.find((x) => x.name.includes("Daniel")) ||
+      v.find((x) => x.lang.includes("en")) ||
+      v[0],
+    rate: 0.95,
+    pitch: 0.75,
+  };
 }
 
 // ==========================
@@ -117,6 +81,10 @@ export function setVoiceMode(mode: VoiceMode) {
   speak(`Voice mode set to ${mode}`);
 }
 
+// ==========================
+// 🔊 SPEAK
+// ==========================
+
 export async function speak(text: string): Promise<void> {
   const clean = text
     .replace(/[*_~`#>]/g, "")
@@ -139,7 +107,7 @@ export async function speak(text: string): Promise<void> {
 
     return new Promise<void>((resolve) => {
       const utterance = new SpeechSynthesisUtterance(clean);
-      const config = getVoiceConfig(currentVoiceMode);
+      const config = getVoiceConfig();
 
       if (config.voice) utterance.voice = config.voice;
       utterance.rate = config.rate;
@@ -193,7 +161,7 @@ export function startListening(onResult: (text: string) => void): boolean {
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
   recognition = new SpeechRecognition();
   recognition.continuous = true;
-  recognition.interimResults = true;
+  recognition.interimResults = false;
   recognition.lang = "en-US";
 
   onResultCallback = onResult;
@@ -202,8 +170,8 @@ export function startListening(onResult: (text: string) => void): boolean {
   recognition.onresult = (event: any) => {
     const result = event.results[event.results.length - 1];
     const text = result[0].transcript.trim();
-    if (!result.isFinal && text.length < 4) return;
-    if (result.isFinal && text && onResultCallback) {
+    console.log("🎤 Heard:", text);
+    if (text && onResultCallback) {
       onResultCallback(text);
     }
   };
@@ -216,6 +184,7 @@ export function startListening(onResult: (text: string) => void): boolean {
 
   recognition.onend = () => {
     if (keepListening) {
+      // 🔁 AUTO RESTART (ALWAYS LISTENING)
       setTimeout(() => { try { recognition?.start(); } catch {} }, 50);
     } else {
       recognition = null;
@@ -224,6 +193,7 @@ export function startListening(onResult: (text: string) => void): boolean {
 
   try {
     recognition.start();
+    console.log("🎤 WOLF listening...");
     return true;
   } catch {
     return false;
@@ -263,12 +233,15 @@ export function startHandsFree(onWake: () => void, onCommand: (text: string) => 
   return startListening((text) => {
     const lower = text.toLowerCase();
 
-    if (!wolfActive && lower.includes("hey wolf")) {
+    const wakeWords = ["hey wolf", "hey wolff", "wake up wolf", "hello wolf"];
+    const isWake = wakeWords.some((w) => lower.includes(w));
+
+    if (!wolfActive && isWake) {
       wolfActive = true;
       wakeWordCallback?.();
       const hour = new Date().getHours();
       const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-      speak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
+      speak(`${greeting}, SK. W.O.L.F online. Awaiting your command.`).catch(() => {});
       return;
     }
 
