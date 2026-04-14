@@ -73,19 +73,17 @@ export async function speak(text: string): Promise<void> {
 
 // ─── Speech Recognition (STT) ───
 
-type SpeechRecognitionType = typeof window extends { SpeechRecognition: infer T } ? T : any;
-
 let recognition: any = null;
 let onResultCallback: ((text: string) => void) | null = null;
 
 export function isRecognitionSupported(): boolean {
-  return !!(window.SpeechRecognition || (window as any).webkitSpeechRecognition);
+  return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 }
 
 export function startListening(onResult: (text: string) => void): boolean {
   if (!isRecognitionSupported()) return false;
 
-  const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+  const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
   recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
