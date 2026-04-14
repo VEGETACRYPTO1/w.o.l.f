@@ -273,9 +273,8 @@ export function ChatOverlay() {
                 </form>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
     </>
   );
 }
