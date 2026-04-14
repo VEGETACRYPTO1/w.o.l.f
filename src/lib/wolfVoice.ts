@@ -39,7 +39,14 @@ export async function speak(text: string): Promise<void> {
       body: JSON.stringify({ text: clean }),
     });
 
-    if (!res.ok) throw new Error(`TTS failed: ${res.status}`);
+    // Check if response is audio or a JSON error
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!res.ok || contentType.includes("application/json")) {
+      // ElevenLabs failed — use browser TTS fallback
+      console.warn("TTS API unavailable, using browser fallback");
+      return speakFallback(clean);
+    }
 
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -63,11 +70,33 @@ export async function speak(text: string): Promise<void> {
       audio.play().catch(reject);
     });
   } catch (err) {
-    isSpeaking = false;
-    currentAudio = null;
-    console.error("Voice error:", err);
-    throw err;
+    console.warn("TTS error, trying browser fallback:", err);
+    return speakFallback(clean);
   }
+}
+
+// ─── Browser TTS Fallback ───
+
+function speakFallback(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (!window.speechSynthesis) {
+      isSpeaking = false;
+      resolve();
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 0.9;
+    utterance.onend = () => {
+      isSpeaking = false;
+      resolve();
+    };
+    utterance.onerror = () => {
+      isSpeaking = false;
+      resolve();
+    };
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 // ─── Speech Recognition (STT) ───
