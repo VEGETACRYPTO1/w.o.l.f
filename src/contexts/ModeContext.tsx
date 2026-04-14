@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { onModeChange } from "@/lib/wolfVoice";
 
 export type Mode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
 
