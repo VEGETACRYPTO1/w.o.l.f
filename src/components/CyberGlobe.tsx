@@ -380,14 +380,14 @@ function BackgroundStars() {
 }
 
 // ── Scene ──
-function Scene({ color }: { color: string }) {
+function Scene({ colors }: { colors: ModeColorSet }) {
   return (
     <>
       <color attach="background" args={["#050507"]} />
       <BloomEffect />
-      <ParticleSphere color={color} />
-      <ConnectionLines color={color} />
-      <NeuronSignals color={color} />
+      <ParticleSphere colors={colors} />
+      <ConnectionLines color={colors.mid} />
+      <NeuronSignals color={colors.highlight} />
       <BackgroundStars />
     </>
   );
@@ -395,16 +395,16 @@ function Scene({ color }: { color: string }) {
 
 export function CyberGlobe() {
   const { mode } = useMode();
-  const color = modeColors[mode] || modeColors.intelligence;
+  const colors = modeColors[mode] || modeColors.intelligence;
 
   return (
-    <div className="fixed inset-0" style={{ zIndex: 0 }}>
+    <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
       <Canvas
         camera={{ position: [0, 0, 5], fov: 75 }}
         gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: "#050507" }}
       >
-        <Scene color={color} />
+        <Scene colors={colors} />
       </Canvas>
     </div>
   );
