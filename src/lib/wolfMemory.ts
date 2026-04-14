@@ -19,24 +19,10 @@ export function saveMemory(memory: WolfMemory) {
 }
 
 function openTab(query: string) {
-  const q = query.toLowerCase().trim();
-  let url = "";
-
-  if (q.includes("youtube")) {
-    const clean = q.replace("open", "").replace("search", "").replace("youtube", "").trim();
-    url = clean
-      ? "https://www.youtube.com/results?search_query=" + encodeURIComponent(clean)
-      : "https://www.youtube.com";
-  } else {
-    const clean = q.replace("search", "").replace("google", "").replace("open", "").trim();
-    url = "https://www.google.com/search?q=" + encodeURIComponent(clean || query);
-  }
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.target = "_blank";
-  a.rel = "noopener noreferrer";
-  a.click();
+  const url = query.startsWith("http")
+    ? query
+    : "https://www.google.com/search?q=" + encodeURIComponent(query);
+  window.open(url, "_blank");
 }
 
 export function handleMemoryAction(
@@ -64,8 +50,7 @@ export function handleMemoryAction(
   }
 
   if (action === "openWebsite") {
-    openTab(data.query);
-    return `🌐 Opening: ${data.query}`;
+    return `🌐 [Open: ${data.query}](search:${data.query})`;
   }
 
   return "";

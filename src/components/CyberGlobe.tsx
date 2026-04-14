@@ -9,10 +9,11 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { useEffect } from "react";
 
 const modeColors: Record<string, string> = {
+  intelligence: "#FFD700",
   war: "#FF3B3B",
   rebuild: "#4090e0",
   expansion: "#40b870",
-  relax: "#3db89a",
+  relax: "#00ffcc",
 };
 
 // Global reset trigger
@@ -398,7 +399,7 @@ function Scene({ color }: { color: string }) {
 
 export function CyberGlobe() {
   const { mode } = useMode();
-  const color = modeColors[mode] || modeColors.war;
+  const color = modeColors[mode] || modeColors.intelligence;
 
   return (
     <div className="fixed inset-0" style={{ zIndex: 0 }}>

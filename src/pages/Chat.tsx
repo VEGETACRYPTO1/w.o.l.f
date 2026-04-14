@@ -6,6 +6,32 @@ import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
+import { ExternalLink } from "lucide-react";
+
+function openTab(query: string) {
+  const url = query.startsWith("http")
+    ? query
+    : "https://www.google.com/search?q=" + encodeURIComponent(query);
+  window.open(url, "_blank");
+}
+
+function ChatMessage({ content }: { content: string }) {
+  // Detect clickable open links: 🌐 [Open: query](search:query)
+  const linkMatch = content.match(/🌐 \[Open: (.+?)\]\(search:(.+?)\)/);
+  if (linkMatch) {
+    const query = linkMatch[2];
+    return (
+      <button
+        onClick={() => openTab(query)}
+        className="flex items-center gap-2 text-primary hover:underline cursor-pointer text-left"
+      >
+        <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+        🌐 Open: {query}
+      </button>
+    );
+  }
+  return <ReactMarkdown>{content}</ReactMarkdown>;
+}
 
 const MODE_SELECTION_MSG = "Choose your mode:";
 
@@ -160,7 +186,7 @@ export default function Chat() {
               }`}
             >
               {msg.role === "assistant" ? (
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+                <ChatMessage content={msg.content} />
               ) : (
                 msg.content
               )}

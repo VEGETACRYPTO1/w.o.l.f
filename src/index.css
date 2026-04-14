@@ -124,15 +124,17 @@
     --accent: 200 12% 17%;
     --border: 200 12% 15%;
     --input: 200 12% 15%;
-    --primary: 160 50% 45%;
-    --ring: 160 50% 45%;
+    --primary: 160 100% 50%;
+    --primary-foreground: 0 0% 0%;
+    --ring: 160 100% 50%;
     --sidebar-background: 200 18% 6%;
     --sidebar-foreground: 200 14% 55%;
-    --sidebar-primary: 160 50% 45%;
-    --sidebar-ring: 160 50% 45%;
+    --sidebar-primary: 160 100% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-ring: 160 100% 50%;
     --sidebar-accent: 200 12% 11%;
     --sidebar-border: 200 12% 11%;
-    --glow-primary: 160 50% 45%;
+    --glow-primary: 160 100% 50%;
     --glow-opacity: 0.1;
     --glow-spread: 40px;
   }
