@@ -192,6 +192,30 @@ function handleWakeWord(text: string): boolean {
 }
 
 // ==========================
+// ⚔️ VOICE MODE SWITCH
+// ==========================
+
+const MODE_KEYWORDS: Record<string, AppMode> = {
+  "intelligence mode": "intelligence",
+  "war mode": "war",
+  "rebuild mode": "rebuild",
+  "expansion mode": "expansion",
+  "relax mode": "relax",
+};
+
+function handleVoiceModeSwitch(text: string): boolean {
+  const lower = text.toLowerCase();
+  for (const [keyword, mode] of Object.entries(MODE_KEYWORDS)) {
+    if (lower.includes(keyword)) {
+      modeSwitchCallback?.(mode as AppMode);
+      wolfSpeak(`${mode} mode activated.`).catch(() => {});
+      return true;
+    }
+  }
+  return false;
+}
+
+// ==========================
 // 🎤 LISTENING SYSTEM (FIXED)
 // ==========================
 
