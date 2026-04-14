@@ -17,7 +17,6 @@ export function stopSpeaking() {
 }
 
 export async function speak(text: string): Promise<void> {
-  // Strip markdown for cleaner speech
   const clean = text
     .replace(/[*_~`#>]/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
@@ -46,7 +45,7 @@ export async function speak(text: string): Promise<void> {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     currentAudio = audio;
-    audio.playbackRate = 1.05;
+    audio.playbackRate = 1.1;
 
     await new Promise<void>((resolve, reject) => {
       audio.onended = () => {
@@ -75,6 +74,7 @@ export async function speak(text: string): Promise<void> {
 
 let recognition: any = null;
 let onResultCallback: ((text: string) => void) | null = null;
+let keepListening = false;
 
 export function isRecognitionSupported(): boolean {
   return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
@@ -85,29 +85,40 @@ export function startListening(onResult: (text: string) => void): boolean {
 
   const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
   recognition = new SpeechRecognition();
-  recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.continuous = true;
+  recognition.interimResults = true;
   recognition.lang = "en-US";
 
   onResultCallback = onResult;
+  keepListening = true;
 
   recognition.onresult = (event: any) => {
     const result = event.results[event.results.length - 1];
-    if (result.isFinal) {
-      const text = result[0].transcript.trim();
-      if (text && onResultCallback) {
-        onResultCallback(text);
-      }
+    // Process interim results for speed if long enough
+    const text = result[0].transcript.trim();
+    if (!result.isFinal && text.length < 4) return;
+
+    if (result.isFinal && text && onResultCallback) {
+      onResultCallback(text);
     }
   };
 
   recognition.onerror = (event: any) => {
     console.error("Speech recognition error:", event.error);
+    // Don't stop on no-speech errors, just let it restart
+    if (event.error === "no-speech" || event.error === "aborted") return;
     stopListening();
   };
 
   recognition.onend = () => {
-    recognition = null;
+    // Ultra-fast restart for continuous listening
+    if (keepListening) {
+      setTimeout(() => {
+        try { recognition?.start(); } catch {}
+      }, 50);
+    } else {
+      recognition = null;
+    }
   };
 
   try {
@@ -119,6 +130,7 @@ export function startListening(onResult: (text: string) => void): boolean {
 }
 
 export function stopListening() {
+  keepListening = false;
   if (recognition) {
     try { recognition.stop(); } catch {}
     recognition = null;
@@ -128,4 +140,51 @@ export function stopListening() {
 
 export function isListening(): boolean {
   return recognition !== null;
+}
+
+// ─── Wake Word + Hands-Free System ───
+
+let wolfActive = false;
+let wakeWordCallback: (() => void) | null = null;
+
+export function isWolfActive() {
+  return wolfActive;
+}
+
+export function startHandsFree(onWake: () => void, onCommand: (text: string) => void): boolean {
+  if (!isRecognitionSupported()) return false;
+
+  wolfActive = false;
+  wakeWordCallback = onWake;
+
+  return startListening((text) => {
+    const lower = text.toLowerCase();
+
+    if (!wolfActive && lower.includes("hey wolf")) {
+      wolfActive = true;
+      wakeWordCallback?.();
+      // Greet user
+      const hour = new Date().getHours();
+      const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      speak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
+      return;
+    }
+
+    if (!wolfActive) return;
+
+    // Interrupt current speech instantly
+    if (isSpeaking && currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+      isSpeaking = false;
+    }
+
+    onCommand(text);
+  });
+}
+
+export function stopHandsFree() {
+  wolfActive = false;
+  wakeWordCallback = null;
+  stopListening();
 }

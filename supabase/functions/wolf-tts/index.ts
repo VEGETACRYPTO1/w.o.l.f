@@ -43,9 +43,9 @@ serve(async (req) => {
           text,
           model_id: "eleven_turbo_v2_5",
           voice_settings: {
-            stability: 0.3,
-            similarity_boost: 0.9,
-            style: 0.5,
+            stability: 0.25,
+            similarity_boost: 0.95,
+            style: 0.6,
             use_speaker_boost: true,
           },
         }),
