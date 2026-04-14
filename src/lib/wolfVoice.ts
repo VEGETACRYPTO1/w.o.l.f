@@ -167,6 +167,7 @@ export function stopSpeaking() { speechSynthesis.cancel(); isSpeaking = false; }
 export function getCurrentVoiceMode(): VoiceMode { return currentVoiceMode; }
 export function setVoiceMode(mode: VoiceMode) { currentVoiceMode = mode; wolfSpeak(`Voice mode set to ${mode}`); }
 export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
+export function onModeSwitch(cb: (mode: AppMode) => void) { modeSwitchCallback = cb; }
 
 // ==========================
 // 🐺 WAKE WORD (FIXED)
