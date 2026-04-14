@@ -59,6 +59,9 @@
     --glow-primary: 42 65% 50%;
     --glow-opacity: 0.12;
     --glow-spread: 40px;
+
+    /* Wolf globe glow */
+    --wolf-glow: #ffd700;
   }
 
   [data-mode="intelligence"] {
