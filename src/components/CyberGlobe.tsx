@@ -9,7 +9,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { useEffect } from "react";
 
 const modeColors: Record<string, string> = {
-  intelligence: "#FFD700",
+  intelligence: "#FFD36B",
   war: "#FF3B3B",
   rebuild: "#4090e0",
   expansion: "#40b870",

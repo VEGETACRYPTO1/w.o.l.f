@@ -1,13 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, X, User, Loader2, Swords, Leaf } from "lucide-react";
-import { useMode } from "@/contexts/ModeContext";
+import { Send, X, User, Swords, Leaf, Brain } from "lucide-react";
+import { useMode, type Mode } from "@/contexts/ModeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
-
-const MODE_SELECTION_MSG = "Choose your mode:";
+import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
@@ -15,31 +14,29 @@ export function ChatOverlay() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isFirstMessage, setIsFirstMessage] = useState(true);
-  const [awaitingModeSelection, setAwaitingModeSelection] = useState(false);
-  const [lastWasModePrompt, setLastWasModePrompt] = useState(false);
+  const [showModeSelector, setShowModeSelector] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleReset = () => {
-    if (lastWasModePrompt) return;
-    setAwaitingModeSelection(true);
-    setIsFirstMessage(false);
-    setIsLoading(false);
-    setLastWasModePrompt(true);
-    setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
+  const handleWolfClick = () => {
+    setShowModeSelector((v) => !v);
     resetSphere();
   };
 
-  const selectMode = (selectedMode: "war" | "relax") => {
+  const selectMode = (selectedMode: Mode) => {
     setMode(selectedMode);
-    setAwaitingModeSelection(false);
-    setLastWasModePrompt(false);
-    const label = selectedMode === "war" ? "⚔️ War Mode activated. State your objective." : "🧘 Relax Mode activated. What would you like to work on?";
-    setMessages((prev) => [...prev, { role: "assistant", content: label }]);
+    setShowModeSelector(false);
+    const labels: Record<Mode, string> = {
+      intelligence: "🧠 Intelligence Mode active.",
+      war: "⚔️ War Mode activated.",
+      relax: "🧘 Relax Mode activated.",
+      rebuild: "🔧 Rebuild Mode activated.",
+      expansion: "🌱 Expansion Mode activated.",
+    };
+    setMessages((prev) => [...prev, { role: "assistant", content: labels[selectedMode] }]);
   };
 
   const send = async () => {
@@ -48,24 +45,8 @@ export function ChatOverlay() {
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
+    setShowModeSelector(false);
 
-    if (isFirstMessage) {
-      setIsFirstMessage(false);
-      setAwaitingModeSelection(true);
-      setLastWasModePrompt(true);
-      setMessages((prev) => [...prev, { role: "assistant", content: MODE_SELECTION_MSG }]);
-      return;
-    }
-
-    if (awaitingModeSelection) {
-      const lower = input.trim().toLowerCase();
-      if (lower.includes("war")) { selectMode("war"); return; }
-      if (lower.includes("relax")) { selectMode("relax"); return; }
-      setMessages((prev) => [...prev, { role: "assistant", content: 'Please reply with "War" or "Relax" to choose your mode.' }]);
-      return;
-    }
-
-    setLastWasModePrompt(false);
     setIsLoading(true);
     let assistantSoFar = "";
     const upsertAssistant = (chunk: string) => {
@@ -79,13 +60,10 @@ export function ChatOverlay() {
       });
     };
 
+    const modeLabels = ["🧠 Intelligence Mode active.", "⚔️ War Mode activated.", "🧘 Relax Mode activated.", "🔧 Rebuild Mode activated.", "🌱 Expansion Mode activated."];
+
     await streamWolfChat({
-      messages: newMessages.filter((m) =>
-        m.content !== MODE_SELECTION_MSG &&
-        !m.content.startsWith("⚔️ War Mode activated") &&
-        !m.content.startsWith("🧘 Relax Mode activated") &&
-        m.content !== 'Please reply with "War" or "Relax" to choose your mode.'
-      ),
+      messages: newMessages.filter((m) => !modeLabels.includes(m.content)),
       mode,
       onDelta: upsertAssistant,
       onDone: () => setIsLoading(false),
@@ -94,6 +72,24 @@ export function ChatOverlay() {
         toast.error(err);
       },
     });
+  };
+
+  const renderContent = (content: string) => {
+    // Detect clickable open links: 🌐 [Open: query](search:query)
+    const linkRegex = /🌐 \[Open: (.+?)\]\(search:(.+?)\)/g;
+    const match = linkRegex.exec(content);
+    if (match) {
+      const query = match[2];
+      return (
+        <button
+          onClick={() => openTab(query)}
+          className="text-left underline decoration-primary/50 hover:decoration-primary transition-colors"
+        >
+          🌐 Open: {match[1]}
+        </button>
+      );
+    }
+    return <ReactMarkdown>{content}</ReactMarkdown>;
   };
 
   return (
@@ -130,17 +126,74 @@ export function ChatOverlay() {
                 maxHeight: "60vh",
               }}
             >
+              {/* Header */}
               <div className="px-4 py-3 flex items-center gap-2 border-b" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
                 <button
-                  onClick={handleReset}
+                  onClick={handleWolfClick}
                   className="hover:scale-110 transition-transform"
-                  title="Reset W.O.L.F"
+                  title="Switch Mode"
                 >
                   <span className="text-base">🐺</span>
                 </button>
                 <span className="text-sm font-bold tracking-wider text-foreground">W.O.L.F</span>
               </div>
 
+              {/* Mode selector (only visible when wolf logo clicked) */}
+              <AnimatePresence>
+                {showModeSelector && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-b"
+                    style={{ borderColor: "hsl(var(--primary) / 0.2)" }}
+                  >
+                    <div className="flex gap-2 p-3">
+                      <button
+                        onClick={() => selectMode("intelligence")}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
+                        style={{
+                          background: mode === "intelligence" ? "rgba(198, 167, 94, 0.25)" : "rgba(198, 167, 94, 0.1)",
+                          borderColor: mode === "intelligence" ? "rgba(255, 211, 107, 0.6)" : "rgba(198, 167, 94, 0.3)",
+                          color: "#FFD36B",
+                          boxShadow: mode === "intelligence" ? "0 0 15px rgba(255, 211, 107, 0.3)" : "none",
+                        }}
+                      >
+                        <Brain className="h-3 w-3" />
+                        Intelligence
+                      </button>
+                      <button
+                        onClick={() => selectMode("war")}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
+                        style={{
+                          background: mode === "war" ? "rgba(220, 38, 38, 0.25)" : "rgba(220, 38, 38, 0.1)",
+                          borderColor: mode === "war" ? "rgba(220, 38, 38, 0.6)" : "rgba(220, 38, 38, 0.3)",
+                          color: "#ef4444",
+                          boxShadow: mode === "war" ? "0 0 15px rgba(220, 38, 38, 0.3)" : "none",
+                        }}
+                      >
+                        <Swords className="h-3 w-3" />
+                        War
+                      </button>
+                      <button
+                        onClick={() => selectMode("relax")}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
+                        style={{
+                          background: mode === "relax" ? "rgba(0, 255, 204, 0.25)" : "rgba(0, 255, 204, 0.1)",
+                          borderColor: mode === "relax" ? "rgba(0, 255, 204, 0.6)" : "rgba(0, 255, 204, 0.3)",
+                          color: "#00ffcc",
+                          boxShadow: mode === "relax" ? "0 0 15px rgba(0, 255, 204, 0.3)" : "none",
+                        }}
+                      >
+                        <Leaf className="h-3 w-3" />
+                        Relax
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Messages */}
               <div className="flex-1 overflow-auto p-4 space-y-3" style={{ maxHeight: "40vh" }}>
                 {messages.length === 0 && (
                   <div className="text-center text-muted-foreground text-xs opacity-60 py-8">
@@ -162,7 +215,7 @@ export function ChatOverlay() {
                           : "bg-white/5 border border-white/10 text-foreground prose prose-xs prose-invert max-w-none"
                       }`}
                     >
-                      {msg.role === "assistant" ? <ReactMarkdown>{msg.content}</ReactMarkdown> : msg.content}
+                      {msg.role === "assistant" ? renderContent(msg.content) : msg.content}
                     </div>
                     {msg.role === "user" && (
                       <div className="h-6 w-6 rounded-md bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -171,37 +224,6 @@ export function ChatOverlay() {
                     )}
                   </div>
                 ))}
-
-                {awaitingModeSelection && (
-                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="flex gap-2 pl-8">
-                    <button
-                      onClick={() => selectMode("war")}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
-                      style={{
-                        background: "rgba(220, 38, 38, 0.15)",
-                        borderColor: "rgba(220, 38, 38, 0.4)",
-                        color: "#ef4444",
-                        boxShadow: "0 0 15px rgba(220, 38, 38, 0.2)",
-                      }}
-                    >
-                      <Swords className="h-3 w-3" />
-                      War
-                    </button>
-                    <button
-                      onClick={() => selectMode("relax")}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all hover:scale-105 border"
-                      style={{
-                        background: "rgba(34, 197, 94, 0.15)",
-                        borderColor: "rgba(34, 197, 94, 0.4)",
-                        color: "#22c55e",
-                        boxShadow: "0 0 15px rgba(34, 197, 94, 0.2)",
-                      }}
-                    >
-                      <Leaf className="h-3 w-3" />
-                      Relax
-                    </button>
-                  </motion.div>
-                )}
 
                 {isLoading && messages[messages.length - 1]?.role === "user" && (
                   <div className="flex gap-2">
@@ -217,6 +239,7 @@ export function ChatOverlay() {
                 <div ref={endRef} />
               </div>
 
+              {/* Input */}
               <div className="p-3 border-t" style={{ borderColor: "hsl(var(--primary) / 0.2)" }}>
                 <form onSubmit={(e) => { e.preventDefault(); send(); }} className="flex items-center gap-2">
                   <input

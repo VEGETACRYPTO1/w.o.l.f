@@ -159,12 +159,26 @@ serve(async (req) => {
       if (WEATHER_API_KEY) {
         try {
           const city = "Dubai";
+          // Current weather
           const weatherRes = await fetch(
             `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${WEATHER_API_KEY}&units=metric`
           );
           const weatherData = await weatherRes.json();
           if (weatherData.main) {
-            externalData += `${city}: ${Math.round(weatherData.main.temp)}°C, ${weatherData.weather?.[0]?.description || "N/A"}`;
+            externalData += `Current: ${city}: ${Math.round(weatherData.main.temp)}°C, ${weatherData.weather?.[0]?.description || "N/A"}\n`;
+          }
+          // 3-day forecast
+          const forecastRes = await fetch(
+            `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${WEATHER_API_KEY}&units=metric&cnt=24`
+          );
+          const forecastData = await forecastRes.json();
+          if (forecastData.list?.length) {
+            const dailyTemps: number[] = [];
+            for (let d = 0; d < 3; d++) {
+              const idx = Math.min((d + 1) * 8 - 1, forecastData.list.length - 1);
+              dailyTemps.push(Math.round(forecastData.list[idx].main.temp));
+            }
+            externalData += `Forecast next 3 days: ${dailyTemps.map(t => t + "°").join(", ")}`;
           }
         } catch (e) {
           console.error("Weather fetch error:", e);
