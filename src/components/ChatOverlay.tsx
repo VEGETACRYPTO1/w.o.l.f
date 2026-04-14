@@ -37,7 +37,14 @@ export function ChatOverlay() {
     );
   }, []);
 
-  const toggleChat = () => {
+  // Wire voice-triggered mode switching
+  useEffect(() => {
+    onModeSwitch((voiceMode: AppMode) => {
+      setMode(voiceMode as Mode);
+    });
+  }, [setMode]);
+
+
     setWolfPulse(true);
     setEnergyBurst(true);
     setTimeout(() => setWolfPulse(false), 400);
