@@ -3,6 +3,9 @@
 // ==========================
 
 export type VoiceMode = "jarvis" | "friday" | "robot" | "intelligence";
+export type AppMode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
+
+let modeSwitchCallback: ((mode: AppMode) => void) | null = null;
 
 let voices: SpeechSynthesisVoice[] = [];
 let voiceReady = false;
@@ -164,6 +167,7 @@ export function stopSpeaking() { speechSynthesis.cancel(); isSpeaking = false; }
 export function getCurrentVoiceMode(): VoiceMode { return currentVoiceMode; }
 export function setVoiceMode(mode: VoiceMode) { currentVoiceMode = mode; wolfSpeak(`Voice mode set to ${mode}`); }
 export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
+export function onModeSwitch(cb: (mode: AppMode) => void) { modeSwitchCallback = cb; }
 
 // ==========================
 // 🐺 WAKE WORD (FIXED)
@@ -185,6 +189,30 @@ function handleWakeWord(text: string): boolean {
   // ⚔️ IMPORTANT FIX → DO NOT BLOCK FUTURE INPUT
   wolfSpeak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
   return true;
+}
+
+// ==========================
+// ⚔️ VOICE MODE SWITCH
+// ==========================
+
+const MODE_KEYWORDS: Record<string, AppMode> = {
+  "intelligence mode": "intelligence",
+  "war mode": "war",
+  "rebuild mode": "rebuild",
+  "expansion mode": "expansion",
+  "relax mode": "relax",
+};
+
+function handleVoiceModeSwitch(text: string): boolean {
+  const lower = text.toLowerCase();
+  for (const [keyword, mode] of Object.entries(MODE_KEYWORDS)) {
+    if (lower.includes(keyword)) {
+      modeSwitchCallback?.(mode as AppMode);
+      wolfSpeak(`${mode} mode activated.`).catch(() => {});
+      return true;
+    }
+  }
+  return false;
 }
 
 // ==========================
@@ -215,7 +243,14 @@ function _autoStartListening() {
 
     // 🐺 WAKE WORD
     const isWake = handleWakeWord(text);
-    if (!isWake && wolfActive && commandCallback) {
+    if (isWake) { isProcessing = false; return; }
+
+    // ⚔️ MODE SWITCH via voice
+    const modeResult = handleVoiceModeSwitch(text);
+    if (modeResult) { isProcessing = false; return; }
+
+    // 🧠 NORMAL COMMAND
+    if (wolfActive && commandCallback) {
       if (isSpeaking) { speechSynthesis.cancel(); isSpeaking = false; }
       commandCallback(text);
     }
