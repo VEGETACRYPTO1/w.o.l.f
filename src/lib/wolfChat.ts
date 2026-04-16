@@ -41,16 +41,17 @@ export async function streamWolfChat({
 
     const memory = getMemory();
 
-    const resp = await fetch("http://127.0.0.1:8080/v1/chat/completions", {
+    const resp = await fetch(CHAT_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
       body: JSON.stringify({
-        messages: [{ role: "system", content: "You are WOLF. Be sharp, short, and powerful." }, ...messages],
-        max_tokens: 100,
-        temperature: 0.7,
-        stop: ["</s>", "<|im_end|>", "User:", "\nUser:"],
+        messages,
+        mode,
+        memory,
+        location,
       }),
     });
 
