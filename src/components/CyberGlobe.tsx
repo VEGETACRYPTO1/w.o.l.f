@@ -945,7 +945,7 @@ export function CyberGlobe({ dissolving = false }: { dissolving?: boolean }) {
   const colors = modeColors[mode] || modeColors.intelligence;
 
   return (
-    <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
+    <div data-bh className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
       <Canvas
         camera={{ position: [0, 0, 5.5], fov: 70 }}
         gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
