@@ -23,7 +23,6 @@ function WakeGate() {
   const showApp = phase === "awake" || phase === "sleeping-out" || phase === "waking";
   const showOrb = phase === "sleeping" || phase === "waking" || phase === "sleeping-out";
   const sucking = phase === "sleeping-out";
-  const waking = phase === "waking";
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   // Compute per-element vector toward viewport center for black-hole pull
@@ -48,13 +47,10 @@ function WakeGate() {
       {showApp && (
         <div
           ref={wrapperRef}
-          className={
-            sucking
-              ? "black-hole-active"
-              : waking
-              ? "wake-emerge"
-              : "animate-fade-in"
-          }
+          className={sucking ? "black-hole-active" : ""}
+          style={{
+            pointerEvents: sucking ? "none" : "auto",
+          }}
         >
           <BrowserRouter>
             <AppLayout phase={phase}>
