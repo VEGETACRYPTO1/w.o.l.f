@@ -1,12 +1,11 @@
-import { useRef, useMemo, useState, useCallback, createContext, useContext } from "react";
+import { useRef, useMemo, useState, useCallback, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Points, PointMaterial, Line } from "@react-three/drei";
+import { Points, PointMaterial } from "@react-three/drei";
 import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { useEffect } from "react";
 
 const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
   intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
@@ -16,12 +15,11 @@ const modeColors: Record<string, { highlight: string; mid: string; shadow: strin
   relax: { highlight: "#00ffcc", mid: "#00cc99", shadow: "#008866" },
 };
 
-// Global reset trigger
-let resetTrigger = 0;
-const resetListeners: Set<() => void> = new Set();
+type ModeColorSet = { highlight: string; mid: string; shadow: string };
 
+// Reset hook (kept for compatibility with any external callers)
+const resetListeners: Set<() => void> = new Set();
 export function resetSphere() {
-  resetTrigger++;
   resetListeners.forEach((fn) => fn());
 }
 
@@ -35,7 +33,7 @@ function BloomEffect() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
-      0.75, 0.4, 0.15
+      1.1, 0.5, 0.1
     );
     composer.addPass(bloom);
     composerRef.current = composer;
@@ -46,345 +44,277 @@ function BloomEffect() {
   return null;
 }
 
-// ── Invisible hit sphere for raycasting ──
-function HitSphere({ onHit }: { onHit: (hovering: boolean, point: THREE.Vector3 | null) => void }) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const mouse = useRef(new THREE.Vector2());
-  const { camera, gl } = useThree();
+// ── Brain-shaped node distribution ──
+// Two hemispheres (left/right), ellipsoidal, with a slight central fissure.
+function generateBrainNodes(count: number) {
+  const nodes: THREE.Vector3[] = [];
+  // Brain ellipsoid radii
+  const a = 2.2; // x (width)
+  const b = 1.6; // y (height)
+  const c = 1.9; // z (depth)
+  const fissure = 0.18; // central gap along x
 
-  useEffect(() => {
-    const updatePointer = (clientX: number, clientY: number) => {
-      const rect = gl.domElement.getBoundingClientRect();
-      mouse.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-      mouse.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    };
+  while (nodes.length < count) {
+    // Sample inside ellipsoid surface band
+    const u = Math.random() * Math.PI * 2;
+    const v = Math.acos(2 * Math.random() - 1);
+    // Surface + slight inward jitter for organic depth
+    const r = 0.85 + Math.random() * 0.18;
+    let x = a * r * Math.sin(v) * Math.cos(u);
+    const y = b * r * Math.sin(v) * Math.sin(u);
+    const z = c * r * Math.cos(v);
 
-    const onMove = (e: MouseEvent) => updatePointer(e.clientX, e.clientY);
-    const onTouch = (e: TouchEvent) => {
-      const t = e.touches[0];
-      if (t) updatePointer(t.clientX, t.clientY);
-    };
+    // Push hemispheres apart along x to create the central fissure
+    if (Math.abs(x) < fissure) continue;
+    x += Math.sign(x) * 0.05;
 
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("touchmove", onTouch, { passive: true });
-    window.addEventListener("touchstart", onTouch, { passive: true });
+    // Add bumpy "gyri" using noise-like sin perturbation
+    const bump =
+      0.08 * Math.sin(4 * u + 3 * v) +
+      0.05 * Math.sin(7 * v - 2 * u);
+    const len = Math.sqrt(x * x + y * y + z * z);
+    const nx = x + (x / len) * bump;
+    const ny = y + (y / len) * bump;
+    const nz = z + (z / len) * bump;
 
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("touchmove", onTouch);
-      window.removeEventListener("touchstart", onTouch);
-    };
-  }, [gl]);
-
-  useFrame(() => {
-    if (!meshRef.current) return;
-    raycaster.setFromCamera(mouse.current, camera);
-    const intersects = raycaster.intersectObject(meshRef.current, false);
-
-    if (intersects.length > 0) {
-      onHit(true, intersects[0].point.clone());
-    } else {
-      onHit(false, null);
-    }
-  });
-
-  return (
-    <mesh ref={meshRef} visible={false}>
-      <sphereGeometry args={[2, 32, 32]} />
-      <meshBasicMaterial visible={false} />
-    </mesh>
-  );
+    nodes.push(new THREE.Vector3(nx, ny, nz));
+  }
+  return nodes;
 }
 
-type ModeColorSet = { highlight: string; mid: string; shadow: string };
-
-function ParticleSphere({ colors }: { colors: ModeColorSet }) {
-  const ref = useRef<THREE.Points>(null);
-  const matRef = useRef<THREE.PointsMaterial>(null);
-  const count = 4000;
-  const radius = 2;
-  const originalPositions = useRef<Float32Array | null>(null);
-  const hitState = useRef<{ hovering: boolean; point: THREE.Vector3 | null }>({ hovering: false, point: null });
-  // Store per-particle color tier (0=highlight, 1=mid, 2=shadow) — stable across mode changes
-  const colorTiers = useRef<Uint8Array | null>(null);
-
-  // Generate positions and color tiers ONCE
-  const { positions, colorArray, offsets } = useMemo(() => {
-    const pos = new Float32Array(count * 3);
-    const col = new Float32Array(count * 3);
-    const offs = new Float32Array(count);
-    const tiers = new Uint8Array(count);
-    for (let i = 0; i < count; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random() * 2 - 1);
-      pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-      pos[i * 3 + 2] = radius * Math.cos(phi);
-      const r = Math.random();
-      tiers[i] = r < 0.2 ? 0 : r < 0.8 ? 1 : 2;
-      offs[i] = Math.random() * Math.PI * 2;
-    }
-    colorTiers.current = tiers;
-    originalPositions.current = pos.slice();
-    return { positions: pos, colorArray: col, offsets: offs };
-  }, []); // positions generated once, never reset
-
-  // Target colors (what we're lerping toward)
-  const targetColors = useRef({ highlight: new THREE.Color(colors.highlight), mid: new THREE.Color(colors.mid), shadow: new THREE.Color(colors.shadow) });
-  // Current interpolated colors
-  const currentColors = useRef({ highlight: new THREE.Color(colors.highlight), mid: new THREE.Color(colors.mid), shadow: new THREE.Color(colors.shadow) });
-
-  // Update targets when mode changes
-  useEffect(() => {
-    targetColors.current.highlight.set(colors.highlight);
-    targetColors.current.mid.set(colors.mid);
-    targetColors.current.shadow.set(colors.shadow);
-  }, [colors.highlight, colors.mid, colors.shadow]);
-
-  const lerpSpeed = 0.04; // smooth transition speed
-
-  // Lerp colors every frame
-  const applyColors = useCallback(() => {
-    if (!ref.current || !colorTiers.current) return;
-    const col = (ref.current.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
-    const tiers = colorTiers.current;
-    const cur = currentColors.current;
-    const tgt = targetColors.current;
-
-    // Lerp current toward target
-    cur.highlight.lerp(tgt.highlight, lerpSpeed);
-    cur.mid.lerp(tgt.mid, lerpSpeed);
-    cur.shadow.lerp(tgt.shadow, lerpSpeed);
-
-    for (let i = 0; i < count; i++) {
-      const tc = tiers[i] === 0 ? cur.highlight : tiers[i] === 1 ? cur.mid : cur.shadow;
-      col[i * 3] = tc.r;
-      col[i * 3 + 1] = tc.g;
-      col[i * 3 + 2] = tc.b;
-    }
-    ref.current.geometry.attributes.color.needsUpdate = true;
-  }, [count]);
-
-  const doReset = useCallback(() => {
-    if (!ref.current || !originalPositions.current) return;
-    const pos = (ref.current.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
-    const orig = originalPositions.current;
-    for (let i = 0; i < pos.length; i++) pos[i] = orig[i];
-    ref.current.geometry.attributes.position.needsUpdate = true;
-  }, []);
-
-  useEffect(() => {
-    resetListeners.add(doReset);
-    return () => { resetListeners.delete(doReset); };
-  }, [doReset]);
-
-  const handleHit = useCallback((hovering: boolean, point: THREE.Vector3 | null) => {
-    hitState.current.hovering = hovering;
-    hitState.current.point = point;
-  }, []);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    if (!ref.current || !originalPositions.current) return;
-
-    // Force-update particle colors every frame
-    applyColors();
-
-    const geometry = ref.current.geometry;
-    const pos = (geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
-    const orig = originalPositions.current;
-    const { hovering, point } = hitState.current;
-
-    let localHit: THREE.Vector3 | null = null;
-    if (hovering && point) {
-      localHit = ref.current.worldToLocal(point.clone());
-    }
-
-    for (let i = 0; i < pos.length; i += 3) {
-      const ox = orig[i], oy = orig[i + 1], oz = orig[i + 2];
-      let nx = ox, ny = oy, nz = oz;
-
-      if (hovering && localHit) {
-        const dot = ox * localHit.x + oy * localHit.y + oz * localHit.z;
-        if (dot > 0) {
-          const dx = ox - localHit.x, dy = oy - localHit.y, dz = oz - localHit.z;
-          const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) + 0.0001;
-          const interactionRadius = 0.7, strength = 0.5;
-          if (dist < interactionRadius) {
-            const falloff = 1 - dist / interactionRadius;
-            const force = falloff * strength;
-            nx += (dx / dist) * force;
-            ny += (dy / dist) * force;
-            nz += (dz / dist) * force;
-          }
-        }
-      }
-
-      pos[i] += (nx - pos[i]) * 0.15;
-      pos[i + 1] += (ny - pos[i + 1]) * 0.15;
-      pos[i + 2] += (nz - pos[i + 2]) * 0.15;
-    }
-
-    geometry.attributes.position.needsUpdate = true;
-    ref.current.rotation.y += 0.0015;
-    ref.current.rotation.x += 0.0005;
-    ref.current.scale.setScalar(1 + Math.sin(t * 0.8) * 0.12);
-
-    if (matRef.current) {
-      matRef.current.opacity = 0.65 + Math.sin(t * 0.7) * 0.12;
-    }
-  });
-
-  return (
-    <>
-      <HitSphere onHit={handleHit} />
-      <points ref={ref}>
-        <bufferGeometry>
-          <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
-          <bufferAttribute attach="attributes-color" count={count} array={colorArray} itemSize={3} />
-        </bufferGeometry>
-        <pointsMaterial
-          ref={matRef}
-          vertexColors
-          size={0.015}
-          transparent
-          opacity={0.75}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          sizeAttenuation
-        />
-      </points>
-    </>
-  );
-}
-
-// ── Connection Lines (thin, low opacity) ──
-function ConnectionLines({ color }: { color: string }) {
-  const ref = useRef<THREE.Group>(null);
-
-  const lines = useMemo(() => {
-    const result: [number, number, number][][] = [];
-    const nodeCount = 250;
-    const radius = 2;
-    const nodes: [number, number, number][] = [];
-    for (let i = 0; i < nodeCount; i++) {
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random() * 2 - 1);
-      nodes.push([
-        radius * Math.sin(phi) * Math.cos(theta),
-        radius * Math.sin(phi) * Math.sin(theta),
-        radius * Math.cos(phi),
-      ]);
-    }
-    const maxDist = 0.5;
-    let c = 0;
-    for (let i = 0; i < nodeCount && c < 120; i++) {
-      for (let j = i + 1; j < nodeCount && c < 120; j++) {
-        const dx = nodes[i][0] - nodes[j][0];
-        const dy = nodes[i][1] - nodes[j][1];
-        const dz = nodes[i][2] - nodes[j][2];
-        if (Math.sqrt(dx * dx + dy * dy + dz * dz) < maxDist) {
-          result.push([nodes[i], nodes[j]]);
-          c++;
-        }
-      }
-    }
-    return result;
-  }, []);
-
-  useFrame(() => {
-    if (ref.current) {
-      ref.current.rotation.y += 0.0015;
-      ref.current.rotation.x += 0.0005;
-    }
-  });
-
-  return (
-    <group ref={ref}>
-      {lines.map((pts, i) => (
-        <Line key={i} points={pts} color={color} lineWidth={0.3} transparent opacity={0.07} />
-      ))}
-    </group>
-  );
-}
-
-// ── Neuron Signals ──
-interface Signal {
+// ── Brain Neural Network ──
+interface Pulse {
   id: number;
-  start: THREE.Vector3;
-  end: THREE.Vector3;
+  edgeIdx: number;
   progress: number;
   speed: number;
 }
 
-let signalId = 0;
+let pulseId = 0;
 
-function randomSurfacePoint(radius: number): THREE.Vector3 {
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(Math.random() * 2 - 1);
-  return new THREE.Vector3(
-    radius * Math.sin(phi) * Math.cos(theta),
-    radius * Math.sin(phi) * Math.sin(theta),
-    radius * Math.cos(phi)
-  );
-}
-
-function NeuronSignals({ color }: { color: string }) {
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const nextSpawn = useRef(0);
+function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const groupRef = useRef<THREE.Group>(null);
-  const maxSignals = 12;
-  const radius = 2;
+  const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
+  const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
+  const pulseGroupRef = useRef<THREE.Group>(null);
+
+  const NODE_COUNT = 280;
+  const MAX_EDGES_PER_NODE = 4;
+  const NEIGHBOR_DIST = 0.55;
+  const MAX_PULSES = 40;
+
+  // Generate brain nodes once
+  const { nodes, edges, edgePositions, firingPhases } = useMemo(() => {
+    const nodes = generateBrainNodes(NODE_COUNT);
+
+    // Build edges: connect each node to nearest few neighbors within radius
+    const edges: [number, number][] = [];
+    const edgeSet = new Set<string>();
+    for (let i = 0; i < nodes.length; i++) {
+      // Find candidate neighbors
+      const candidates: { j: number; d: number }[] = [];
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const d = nodes[i].distanceTo(nodes[j]);
+        if (d < NEIGHBOR_DIST) candidates.push({ j, d });
+      }
+      candidates.sort((p, q) => p.d - q.d);
+      const take = Math.min(MAX_EDGES_PER_NODE, candidates.length);
+      for (let k = 0; k < take; k++) {
+        const j = candidates[k].j;
+        const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          edges.push([i, j]);
+        }
+      }
+    }
+
+    // Build flat positions array for line segments
+    const edgePositions = new Float32Array(edges.length * 2 * 3);
+    for (let e = 0; e < edges.length; e++) {
+      const [i, j] = edges[e];
+      const a = nodes[i], b = nodes[j];
+      edgePositions[e * 6 + 0] = a.x;
+      edgePositions[e * 6 + 1] = a.y;
+      edgePositions[e * 6 + 2] = a.z;
+      edgePositions[e * 6 + 3] = b.x;
+      edgePositions[e * 6 + 4] = b.y;
+      edgePositions[e * 6 + 5] = b.z;
+    }
+
+    // Per-node firing phase offset (random)
+    const firingPhases = new Float32Array(nodes.length);
+    for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
+
+    return { nodes, edges, edgePositions, firingPhases };
+  }, []);
+
+  // Pulses traveling along edges
+  const [pulses, setPulses] = useState<Pulse[]>([]);
+  const nextSpawn = useRef(0);
+
+  // Color objects
+  const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
+  const midColor = useMemo(() => new THREE.Color(colors.mid), []);
+  const shadowColor = useMemo(() => new THREE.Color(colors.shadow), []);
+  const targetHighlight = useRef(new THREE.Color(colors.highlight));
+  const targetMid = useRef(new THREE.Color(colors.mid));
+  const targetShadow = useRef(new THREE.Color(colors.shadow));
+
+  useEffect(() => {
+    targetHighlight.current.set(colors.highlight);
+    targetMid.current.set(colors.mid);
+    targetShadow.current.set(colors.shadow);
+  }, [colors.highlight, colors.mid, colors.shadow]);
+
+  // Set up instanced node mesh transforms once
+  useEffect(() => {
+    if (!nodeMeshRef.current) return;
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < nodes.length; i++) {
+      dummy.position.copy(nodes[i]);
+      dummy.scale.setScalar(1);
+      dummy.updateMatrix();
+      nodeMeshRef.current.setMatrixAt(i, dummy.matrix);
+      nodeMeshRef.current.setColorAt(i, midColor);
+    }
+    nodeMeshRef.current.instanceMatrix.needsUpdate = true;
+    if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
+  }, [nodes, midColor]);
+
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  const tmpColor = useMemo(() => new THREE.Color(), []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
-    // Rotate with sphere
+    // Lerp colors smoothly toward target
+    highlightColor.lerp(targetHighlight.current, 0.04);
+    midColor.lerp(targetMid.current, 0.04);
+    shadowColor.lerp(targetShadow.current, 0.04);
+
+    // Breathing scale
+    const breath = 1 + Math.sin(t * 0.7) * 0.04;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0015;
-      groupRef.current.rotation.x += 0.0005;
+      groupRef.current.rotation.y += 0.0012;
+      groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
+      groupRef.current.scale.setScalar(breath);
     }
 
-    // Spawn signals
-    if (t > nextSpawn.current && signals.length < maxSignals) {
-      const s: Signal = {
-        id: signalId++,
-        start: randomSurfacePoint(radius),
-        end: randomSurfacePoint(radius),
-        progress: 0,
-        speed: 0.008 + Math.random() * 0.008,
-      };
-      setSignals(prev => [...prev, s]);
-      nextSpawn.current = t + 0.3 + Math.random() * 0.5;
+    // Update node firing (pulse + brightness)
+    if (nodeMeshRef.current) {
+      for (let i = 0; i < nodes.length; i++) {
+        const phase = firingPhases[i];
+        // Random firing — sharp peaks
+        const fire = Math.pow(Math.max(0, Math.sin(t * 1.2 + phase)), 8);
+        const baseScale = 0.012;
+        const scale = baseScale + fire * 0.045;
+        dummy.position.copy(nodes[i]);
+        dummy.scale.setScalar(scale);
+        dummy.updateMatrix();
+        nodeMeshRef.current.setMatrixAt(i, dummy.matrix);
+
+        // Color: idle = mid, firing = highlight
+        tmpColor.copy(midColor).lerp(highlightColor, fire);
+        nodeMeshRef.current.setColorAt(i, tmpColor);
+      }
+      nodeMeshRef.current.instanceMatrix.needsUpdate = true;
+      if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    // Advance and cull
-    setSignals(prev =>
+    // Edge color breathes subtly
+    if (lineMatRef.current) {
+      lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
+      lineMatRef.current.opacity = 0.18 + Math.sin(t * 0.9) * 0.05;
+    }
+
+    // Spawn new pulses
+    if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
+      const newPulses: Pulse[] = [];
+      const spawnCount = 1 + Math.floor(Math.random() * 3);
+      for (let k = 0; k < spawnCount; k++) {
+        newPulses.push({
+          id: pulseId++,
+          edgeIdx: Math.floor(Math.random() * edges.length),
+          progress: 0,
+          speed: 0.012 + Math.random() * 0.018,
+        });
+      }
+      setPulses((prev) => [...prev, ...newPulses]);
+      nextSpawn.current = t + 0.08 + Math.random() * 0.25;
+    }
+
+    // Advance pulses
+    setPulses((prev) =>
       prev
-        .map(s => ({ ...s, progress: s.progress + s.speed }))
-        .filter(s => s.progress <= 1)
+        .map((p) => ({ ...p, progress: p.progress + p.speed }))
+        .filter((p) => p.progress <= 1)
     );
   });
 
   return (
     <group ref={groupRef}>
-      {signals.map(s => {
-        // Interpolate along great-circle (spherical lerp on surface)
-        const p = new THREE.Vector3().lerpVectors(s.start, s.end, s.progress).normalize().multiplyScalar(radius);
-        const opacity = Math.sin(s.progress * Math.PI); // fade in/out
-        return (
-          <mesh key={s.id} position={[p.x, p.y, p.z]}>
-            <sphereGeometry args={[0.025, 8, 8]} />
-            <meshBasicMaterial
-              color={color}
-              transparent
-              opacity={opacity * 0.9}
-              blending={THREE.AdditiveBlending}
-            />
-          </mesh>
-        );
-      })}
+      {/* Synaptic connections */}
+      <lineSegments>
+        <bufferGeometry>
+          <bufferAttribute
+            attach="attributes-position"
+            count={edgePositions.length / 3}
+            array={edgePositions}
+            itemSize={3}
+          />
+        </bufferGeometry>
+        <lineBasicMaterial
+          ref={lineMatRef}
+          color={colors.mid}
+          transparent
+          opacity={0.2}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </lineSegments>
+
+      {/* Neuron nodes (instanced) */}
+      <instancedMesh
+        ref={nodeMeshRef}
+        args={[undefined, undefined, NODE_COUNT]}
+      >
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial
+          transparent
+          opacity={0.95}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </instancedMesh>
+
+      {/* Electric pulses traveling along edges */}
+      <group ref={pulseGroupRef}>
+        {pulses.map((p) => {
+          const [i, j] = edges[p.edgeIdx];
+          const a = nodes[i];
+          const b = nodes[j];
+          const x = a.x + (b.x - a.x) * p.progress;
+          const y = a.y + (b.y - a.y) * p.progress;
+          const z = a.z + (b.z - a.z) * p.progress;
+          const intensity = Math.sin(p.progress * Math.PI);
+          return (
+            <mesh key={p.id} position={[x, y, z]}>
+              <sphereGeometry args={[0.03, 8, 8]} />
+              <meshBasicMaterial
+                color={colors.highlight}
+                transparent
+                opacity={intensity}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                toneMapped={false}
+              />
+            </mesh>
+          );
+        })}
+      </group>
     </group>
   );
 }
@@ -420,9 +350,7 @@ function Scene({ colors }: { colors: ModeColorSet }) {
     <>
       <color attach="background" args={["#050507"]} />
       <BloomEffect />
-      <ParticleSphere colors={colors} />
-      <ConnectionLines color={colors.mid} />
-      <NeuronSignals color={colors.highlight} />
+      <BrainNetwork colors={colors} />
       <BackgroundStars />
     </>
   );
@@ -435,7 +363,7 @@ export function CyberGlobe() {
   return (
     <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
       <Canvas
-        camera={{ position: [0, 0, 5], fov: 75 }}
+        camera={{ position: [0, 0, 5.5], fov: 70 }}
         gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: "#050507" }}
       >
