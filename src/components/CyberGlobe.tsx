@@ -225,26 +225,32 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     hoverPoint.current = local;
   }, []);
 
-  // Subscribe to brain wave events from chat
+  // Subscribe to brain wave events from chat — originate from a core node
   useEffect(() => {
     const off = onBrainEvent("wave", () => {
-      const idx = Math.floor(Math.random() * nodes.length);
+      const idx = coreNodes.length > 0
+        ? coreNodes[Math.floor(Math.random() * coreNodes.length)]
+        : Math.floor(Math.random() * nodes.length);
       waveOrigin.current = nodes[idx].clone();
       waveStart.current = performance.now() / 1000;
       const adj = edgesByNode[idx];
       const burst: Pulse[] = [];
       for (let k = 0; k < Math.min(adj.length, 8); k++) {
+        const e = adj[k];
+        // Reverse so pulse travels outward from this node
+        const reverse = edges[e][0] !== idx;
         burst.push({
           id: pulseId++,
-          edgeIdx: adj[k],
+          edgeIdx: e,
           progress: 0,
           speed: 0.03 + Math.random() * 0.02,
+          reverse,
         });
       }
       setPulses((prev) => [...prev, ...burst]);
     });
     return () => { off(); };
-  }, [nodes, edgesByNode]);
+  }, [nodes, edgesByNode, coreNodes, edges]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
