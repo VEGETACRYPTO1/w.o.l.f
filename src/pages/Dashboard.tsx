@@ -30,6 +30,7 @@ export default function Dashboard() {
       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
+        data-bh
         className="absolute top-5 left-[30px] z-20 font-mono text-foreground"
       >
         <div className="text-lg tracking-[2px]">{time}</div>
@@ -39,6 +40,7 @@ export default function Dashboard() {
       <motion.div
         initial={{ opacity: 0, x: 10 }}
         animate={{ opacity: 1, x: 0 }}
+        data-bh
         className="absolute top-5 right-[30px] z-20"
       >
         <h1 className="text-xl font-heading font-bold tracking-[3px] text-foreground/90 font-mono">
