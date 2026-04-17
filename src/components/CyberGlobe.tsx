@@ -353,20 +353,20 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
     }
 
-    // Spawn pulses (denser ambient firing)
+    // Spawn pulses (denser ambient firing, more during speech)
     if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
       const newPulses: Pulse[] = [];
-      const spawnCount = 2 + Math.floor(Math.random() * 4);
+      const spawnCount = 2 + Math.floor(Math.random() * 4) + Math.floor(audio * 5);
       for (let k = 0; k < spawnCount; k++) {
         newPulses.push({
           id: pulseId++,
           edgeIdx: Math.floor(Math.random() * edges.length),
           progress: 0,
-          speed: 0.012 + Math.random() * 0.02,
+          speed: 0.012 + Math.random() * 0.02 + audio * 0.02,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
-      nextSpawn.current = t + 0.05 + Math.random() * 0.18;
+      nextSpawn.current = t + 0.05 + Math.random() * 0.18 - audio * 0.1;
     }
 
     // Hover burst — find nearest node, fire pulses along its edges
@@ -489,11 +489,38 @@ function BackgroundStars() {
   );
 }
 
+// ── Parallax camera drift based on mouse ──
+function ParallaxCamera() {
+  const { camera, gl } = useThree();
+  const target = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      target.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      target.current.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [gl]);
+
+  useFrame(() => {
+    const desiredX = target.current.x * 0.6;
+    const desiredY = target.current.y * 0.4;
+    camera.position.x += (desiredX - camera.position.x) * 0.04;
+    camera.position.y += (desiredY - camera.position.y) * 0.04;
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
+}
+
 function Scene({ colors }: { colors: ModeColorSet }) {
   return (
     <>
       <color attach="background" args={["#050507"]} />
       <BloomEffect />
+      <ParallaxCamera />
       <BrainNetwork colors={colors} />
       <BackgroundStars />
     </>
