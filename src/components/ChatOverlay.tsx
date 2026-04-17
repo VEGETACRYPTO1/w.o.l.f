@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, X, User, Swords, Leaf, Brain } from "lucide-react";
 import { useMode, type Mode } from "@/contexts/ModeContext";
-import { streamDragonChat, type Msg } from "@/lib/wolfChat";
+import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
@@ -83,8 +83,10 @@ export function ChatOverlay() {
       });
     };
 
-    await streamDragonChat({
+    await streamWolfChat({
       messages: newMessages,
+      mode,
+      location: (window as any).userLocation,
       onDelta: upsertAssistant,
       onDone: () => {
         setIsLoading(false);
