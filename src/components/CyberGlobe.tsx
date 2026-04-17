@@ -127,6 +127,8 @@ interface Pulse {
   edgeIdx: number;
   progress: number;
   speed: number;
+  toNode: number; // node index the pulse is traveling TOWARD
+  generation: number; // 0 = ambient, increments each chain
 }
 
 let pulseId = 0;
