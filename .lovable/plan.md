@@ -1,54 +1,35 @@
 
-Root cause:
-The chat is still failing for the same reason: the frontend is still sending requests to `http://127.0.0.1:8080/v1/chat/completions`. I confirmed this in both the code and the latest network log. The deployed chat function is never being called, so this is not currently a backend issue.
+**Goal:** When mode changes, fire a one-time radial shockwave from the brain's center that travels outward through the synaptic lines, tinted to the mode color, then returns to normal gold rendering.
 
-What I found:
-- `src/lib/wolfChat.ts` still has:
-  ```ts
-  fetch("http://127.0.0.1:8080/v1/chat/completions", ...)
-  ```
-- That same file already defines the correct function URL as:
-  ```ts
-  const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-chat`;
-  ```
-- The latest browser network log shows the app is still posting to localhost and failing with `Failed to fetch`.
+**Approach:**
 
-Plan to fix:
-1. Update `src/lib/wolfChat.ts` so chat uses `CHAT_URL` instead of the localhost URL.
-2. Send the payload the deployed function actually expects:
-   - `messages`
-   - `mode`
-   - `memory`
-   - `location`
-3. Add the auth header the function call should include:
-   ```ts
-   Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`
-   ```
-4. Keep the existing SSE/json response handling, since that part already matches the edge function behavior.
-5. Verify the fix by checking that:
-   - the browser network request goes to `/functions/v1/wolf-chat`
-   - the request no longer fails immediately with `Failed to fetch`
-   - chat returns either a streamed reply or a real backend error message
+1. **Extend `src/lib/brainEvents.ts`**
+   - Add a new event type `"modeBurst"` carrying a `{ color: string }` payload.
+   - Add `emitModeBurst(color)` and `onModeBurst(cb)` helpers (slight signature change since existing events are payload-less — keep existing API intact, add a parallel typed channel for burst).
 
-Implementation shape:
-```ts
-const resp = await fetch(CHAT_URL, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-  },
-  body: JSON.stringify({
-    messages,
-    mode,
-    memory,
-    location,
-  }),
-});
-```
+2. **Trigger from `src/contexts/ModeContext.tsx`**
+   - In `setMode`, after applying the new mode, call `emitModeBurst(color)` with the mapped color:
+     - `intelligence` → `#FFD36B`
+     - `war` → `#ef4444`
+     - `relax` → `#00ffcc`
+     - `rebuild` / `expansion` → fall back to gold (or skip).
+   - Skip on the very first mount so it doesn't fire on page load.
 
-Why this is happening:
-A previous attempted fix did not actually land in the current codebase. The source file still contains the hardcoded localhost URL, so the app keeps calling a server that does not exist in preview/production.
+3. **Render the shockwave in `src/components/CyberGlobe.tsx`**
+   - Subscribe to `onModeBurst` inside the brain mesh component. On event, store `{ startTime, color, active: true }` in a ref.
+   - Each frame while active (duration ~1.4s):
+     - Compute `progress = (now - startTime) / duration` (0→1).
+     - Compute a radial wavefront radius = `progress * maxRadius` (where maxRadius covers the whole brain ellipsoid).
+     - For each edge, measure its midpoint distance from center. If distance is within a band around the wavefront (e.g. `|dist - radius| < bandWidth`), bump that edge's `edgeGlow` to 1.0 using the burst color.
+   - **Color tint:** temporarily override the edge highlight color (`hiR/hiG/hiB`) with the burst color while active, blending back to gold as `progress → 1`. Implement by storing a current `highlightColor` Vector3 in the existing color-write loop and lerping it back to the gold default.
+   - Also spawn a handful of pulses originating from center-most nodes radiating outward to reinforce the shockwave through the chaining system already in place.
 
-If anything remains after this fix:
-Once the frontend points to the real function, I’ll inspect the backend logs next only if a new error appears. Right now the request is dying before it ever reaches the deployed chat function.
+4. **No core mesh / no breathing changes** — respect prior memory rules ("don't ruin what I built", no volumetric core, single-flow breathing).
+
+**Files to edit:**
+- `src/lib/brainEvents.ts` — add burst channel.
+- `src/contexts/ModeContext.tsx` — emit burst on mode change (skip first mount).
+- `src/components/CyberGlobe.tsx` — subscribe + render shockwave + tint edge highlight color during burst.
+
+**Behavior summary:**
+- Mode change → instant single radial wave of colored glow racing through synaptic lines from center outward over ~1.4s → smoothly returns to gold ambient state. No persistent color change to nodes, no visual lingering.
