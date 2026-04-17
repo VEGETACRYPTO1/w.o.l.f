@@ -133,10 +133,12 @@ interface Pulse {
 
 let pulseId = 0;
 
-function BrainNetwork({ colors }: { colors: ModeColorSet }) {
+function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; dissolving?: boolean }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineGeomRef = useRef<THREE.BufferGeometry>(null);
+  const mountTimeRef = useRef<number>(performance.now() / 1000);
+  const dissolveStartRef = useRef<number | null>(null);
 
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
