@@ -136,7 +136,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
 
-  const NODE_COUNT = 560;
+  const NODE_COUNT = 392;
   const MAX_EDGES_PER_NODE = 6;
   const NEIGHBOR_DIST = 0.48;
   const MAX_PULSES = 90;
