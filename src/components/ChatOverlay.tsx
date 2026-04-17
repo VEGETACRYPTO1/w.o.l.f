@@ -83,8 +83,10 @@ export function ChatOverlay() {
       });
     };
 
-    await streamDragonChat({
+    await streamWolfChat({
       messages: newMessages,
+      mode,
+      location: (window as any).userLocation,
       onDelta: upsertAssistant,
       onDone: () => {
         setIsLoading(false);
