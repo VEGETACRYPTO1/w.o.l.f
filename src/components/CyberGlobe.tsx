@@ -595,11 +595,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         />
       </instancedMesh>
 
-      {pulses.map((p) => {
+      {pulses.filter(p => edges[p.edgeIdx] && nodes[p.toNode]).map((p) => {
         const [i, j] = edges[p.edgeIdx];
         const fromIdx = p.toNode === j ? i : j;
         const a = nodes[fromIdx];
         const b = nodes[p.toNode];
+        if (!a || !b) return null;
         const x = a.x + (b.x - a.x) * p.progress;
         const y = a.y + (b.y - a.y) * p.progress;
         const z = a.z + (b.z - a.z) * p.progress;
