@@ -249,6 +249,40 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     return () => { off(); };
   }, [nodes, edgesByNode]);
 
+  // Subscribe to mode burst — radial shockwave from center
+  useEffect(() => {
+    const off = onModeBurst((color) => {
+      burstColor.current.set(color);
+      burstStart.current = performance.now() / 1000;
+      burstActive.current = true;
+      // Spawn pulses from the most-central nodes outward
+      const centerNodes = nodes
+        .map((n, i) => ({ i, d: n.length() }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 10);
+      const burst: Pulse[] = [];
+      for (const { i: idx } of centerNodes) {
+        const adj = edgesByNode[idx];
+        for (let k = 0; k < Math.min(adj.length, 3); k++) {
+          const edgeIdx = adj[k];
+          const [ei, ej] = edges[edgeIdx];
+          const toNode = ei === idx ? ej : ei;
+          // Pick the outward-facing direction
+          burst.push({
+            id: pulseId++,
+            edgeIdx,
+            progress: 0,
+            speed: 0.025 + Math.random() * 0.02,
+            toNode,
+            generation: 0,
+          });
+        }
+      }
+      setPulses((prev) => [...prev, ...burst]);
+    });
+    return () => { off(); };
+  }, [nodes, edges, edgesByNode]);
+
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
   const shadowColor = useMemo(() => new THREE.Color(colors.shadow), []);
