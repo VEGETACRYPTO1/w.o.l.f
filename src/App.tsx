@@ -19,13 +19,14 @@ const queryClient = new QueryClient();
 
 function WakeGate() {
   const { phase } = useWake();
-  const showApp = phase === "awake" || phase === "sleeping-out";
+  // Render the app during waking too — so the brain forms behind the orb burst
+  const showApp = phase === "awake" || phase === "sleeping-out" || phase === "waking";
   const showOrb = phase === "sleeping" || phase === "waking" || phase === "sleeping-out";
   const sucking = phase === "sleeping-out";
+  const waking = phase === "waking";
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // When entering sleeping-out, compute per-element vector toward viewport center
-  // and write it into a CSS var so the keyframe pulls each element to the orb.
+  // Compute per-element vector toward viewport center for black-hole pull
   useEffect(() => {
     if (!sucking || !wrapperRef.current) return;
     const cx = window.innerWidth / 2;
@@ -47,7 +48,13 @@ function WakeGate() {
       {showApp && (
         <div
           ref={wrapperRef}
-          className={`${sucking ? "black-hole-active" : "animate-fade-in"}`}
+          className={
+            sucking
+              ? "black-hole-active"
+              : waking
+              ? "wake-emerge"
+              : "animate-fade-in"
+          }
         >
           <BrowserRouter>
             <AppLayout dissolving={sucking}>
@@ -83,4 +90,3 @@ const App = () => (
 );
 
 export default App;
-

@@ -24,7 +24,6 @@ export function WakeProvider({ children }: { children: React.ReactNode }) {
     setPhaseState(p);
   }, []);
 
-  // Persist only stable phases
   useEffect(() => {
     if (phase === "awake" || phase === "sleeping") {
       localStorage.setItem(STORAGE_KEY, phase);
@@ -33,7 +32,7 @@ export function WakeProvider({ children }: { children: React.ReactNode }) {
 
   const wake = useCallback(() => {
     setPhaseState((cur) => (cur === "sleeping" ? "waking" : cur));
-    // Charge (1.0s) + snap + smooth fade overlap with brain forming — ~2.4s
+    // Charge 1.0s + flash 0.15s + crossfade with brain 1.2s = 2.4s total
     window.setTimeout(() => {
       setPhaseState((cur) => (cur === "waking" ? "awake" : cur));
     }, 2400);
@@ -44,10 +43,10 @@ export function WakeProvider({ children }: { children: React.ReactNode }) {
     import("@/lib/wolfVoice").then((m) => {
       try { m.stopHandsFree(); } catch {}
     }).catch(() => {});
-    // Black-hole suction is 1.7s; let elements fully spiral in
+    // Long enough for the suction to fully play out (2.6s)
     window.setTimeout(() => {
       setPhaseState((cur) => (cur === "sleeping-out" ? "sleeping" : cur));
-    }, 1800);
+    }, 2600);
   }, []);
 
   return (

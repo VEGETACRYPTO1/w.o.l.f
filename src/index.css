@@ -193,53 +193,67 @@
     transition: background-color 0.5s ease, border-color 0.5s ease, color 0.3s ease, box-shadow 0.5s ease;
   }
 
-  /* ── Black hole suction: spirals UI elements into the center ── */
+  /* ── Black hole suction: visible inward travel + heavy spin near end ── */
   @keyframes blackHoleSuck {
     0% {
       transform: translate(0, 0) scale(1) rotate(0deg);
       opacity: 1;
       filter: blur(0px) brightness(1);
     }
-    20% {
-      transform: translate(calc(var(--bh-dx, 0px) * 0.1), calc(var(--bh-dy, 0px) * 0.1))
-                 scale(0.95) rotate(120deg);
+    25% {
+      transform: translate(calc(var(--bh-dx, 0px) * 0.25), calc(var(--bh-dy, 0px) * 0.25))
+                 scale(0.92) rotate(180deg);
       opacity: 1;
-      filter: blur(0px) brightness(1.4);
+      filter: blur(0px) brightness(1.3);
     }
     55% {
-      transform: translate(calc(var(--bh-dx, 0px) * 0.6), calc(var(--bh-dy, 0px) * 0.6))
-                 scale(0.55) rotate(540deg);
-      opacity: 0.95;
-      filter: blur(1px) brightness(2);
+      transform: translate(calc(var(--bh-dx, 0px) * 0.65), calc(var(--bh-dy, 0px) * 0.65))
+                 scale(0.7) rotate(600deg);
+      opacity: 1;
+      filter: blur(0.6px) brightness(1.8);
     }
-    85% {
+    80% {
       transform: translate(calc(var(--bh-dx, 0px) * 0.92), calc(var(--bh-dy, 0px) * 0.92))
-                 scale(0.18) rotate(900deg);
-      opacity: 0.6;
-      filter: blur(2.5px) brightness(2.6);
+                 scale(0.32) rotate(1080deg);
+      opacity: 0.85;
+      filter: blur(2px) brightness(2.4);
     }
     100% {
-      transform: translate(var(--bh-dx, 0px), var(--bh-dy, 0px)) scale(0.01) rotate(1260deg);
+      transform: translate(var(--bh-dx, 0px), var(--bh-dy, 0px)) scale(0.01) rotate(1620deg);
       opacity: 0;
-      filter: blur(5px) brightness(3);
+      filter: blur(6px) brightness(3.2);
     }
   }
 
-  /* Wrapper: do NOT shrink the whole app — that hid the suction.
-     Just tint and slightly desaturate while children spiral in. */
+  /* Wrapper: very subtle dimming so we don't hide the inward motion */
   @keyframes blackHoleWrapper {
-    0%   { filter: brightness(1) contrast(1); }
-    60%  { filter: brightness(0.85) contrast(1.1); }
-    100% { filter: brightness(0.4) contrast(1.3); opacity: 0.4; }
+    0%   { filter: brightness(1) contrast(1); opacity: 1; }
+    70%  { filter: brightness(0.95) contrast(1.05); opacity: 0.95; }
+    100% { filter: brightness(0.5) contrast(1.2); opacity: 0; }
   }
 
   .black-hole-active {
-    animation: blackHoleWrapper 1.8s ease-in forwards;
+    animation: blackHoleWrapper 2.4s ease-in forwards;
     will-change: filter, opacity;
   }
 
   .black-hole-active [data-bh] {
-    animation: blackHoleSuck 1.7s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+    animation: blackHoleSuck 2.2s cubic-bezier(0.55, 0, 0.75, 0) forwards;
+    transform-origin: 50% 50%;
+    will-change: transform, opacity, filter;
+  }
+
+  /* ── Wake emerge: brain/UI grows out of the orb burst ── */
+  @keyframes wakeEmerge {
+    0%   { transform: scale(0.05); opacity: 0; filter: blur(8px) brightness(2); }
+    35%  { transform: scale(0.2); opacity: 0; filter: blur(6px) brightness(1.8); }
+    55%  { transform: scale(0.55); opacity: 0.4; filter: blur(3px) brightness(1.4); }
+    80%  { transform: scale(0.92); opacity: 0.85; filter: blur(0.5px) brightness(1.1); }
+    100% { transform: scale(1); opacity: 1; filter: blur(0) brightness(1); }
+  }
+
+  .wake-emerge {
+    animation: wakeEmerge 2.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     transform-origin: 50% 50%;
     will-change: transform, opacity, filter;
   }
