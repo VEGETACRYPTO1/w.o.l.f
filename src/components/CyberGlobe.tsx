@@ -252,6 +252,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   // Subscribe to mode burst — radial shockwave from center
   useEffect(() => {
     const off = onModeBurst((color) => {
+      console.log("💥 BURST", color);
       burstColor.current.set(color);
       burstStart.current = performance.now() / 1000;
       burstActive.current = true;
@@ -263,8 +264,10 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const burst: Pulse[] = [];
       for (const { i: idx } of centerNodes) {
         const adj = edgesByNode[idx];
+        if (!adj || adj.length === 0) continue;
         for (let k = 0; k < Math.min(adj.length, 3); k++) {
           const edgeIdx = adj[k];
+          if (edgeIdx == null || !edges[edgeIdx]) continue;
           const [ei, ej] = edges[edgeIdx];
           const toNode = ei === idx ? ej : ei;
           // Pick the outward-facing direction
@@ -511,8 +514,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const children: Pulse[] = [];
       const MAX_GENERATION = 4;
       for (const p of prev) {
+        if (!edges[p.edgeIdx] || !nodes[p.toNode]) continue;
         const next = p.progress + p.speed;
-        edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+        if (p.edgeIdx < edgeGlow.length) {
+          edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+        }
         if (next <= 1) {
           survivors.push({ ...p, progress: next });
         } else if (
@@ -522,12 +528,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         ) {
           // Chain: spawn 1-2 child pulses on edges connected to the destination node
           const adj = edgesByNode[p.toNode];
+          if (!adj) continue;
           // Avoid going back along the same edge
           const candidates = adj.filter((e) => e !== p.edgeIdx);
           if (candidates.length > 0) {
             const childCount = 1 + (Math.random() < 0.4 ? 1 : 0);
             for (let k = 0; k < childCount && k < candidates.length; k++) {
               const pick = candidates[Math.floor(Math.random() * candidates.length)];
+              if (!edges[pick]) continue;
               const [ei, ej] = edges[pick];
               children.push({
                 id: pulseId++,
@@ -587,11 +595,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         />
       </instancedMesh>
 
-      {pulses.map((p) => {
+      {pulses.filter(p => edges[p.edgeIdx] && nodes[p.toNode]).map((p) => {
         const [i, j] = edges[p.edgeIdx];
         const fromIdx = p.toNode === j ? i : j;
         const a = nodes[fromIdx];
         const b = nodes[p.toNode];
+        if (!a || !b) return null;
         const x = a.x + (b.x - a.x) * p.progress;
         const y = a.y + (b.y - a.y) * p.progress;
         const z = a.z + (b.z - a.z) * p.progress;
