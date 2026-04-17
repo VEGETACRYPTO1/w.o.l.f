@@ -134,15 +134,17 @@ let pulseId = 0;
 function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
-  const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
+  const lineGeomRef = useRef<THREE.BufferGeometry>(null);
+  const coreMatRef = useRef<THREE.MeshBasicMaterial>(null);
 
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
   const NEIGHBOR_DIST = 0.48;
   const MAX_PULSES = 90;
   const HOVER_RADIUS = 0.9;
+  const TRAIL_DECAY = 1.6; // higher = faster fade
 
-  const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
+  const { nodes, edges, edgePositions, edgeColors, firingPhases, edgesByNode } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
 
     const edges: [number, number][] = [];
@@ -188,8 +190,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const firingPhases = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
 
-    return { nodes, edges, edgePositions, firingPhases, edgesByNode };
+    const edgeColors = new Float32Array(edges.length * 2 * 3);
+    return { nodes, edges, edgePositions, edgeColors, firingPhases, edgesByNode };
   }, []);
+
+  // Per-edge trail glow intensity (0..1), decays over time
+  const edgeGlow = useMemo(() => new Float32Array(edges.length), [edges.length]);
 
   const [pulses, setPulses] = useState<Pulse[]>([]);
   const nextSpawn = useRef(0);
@@ -269,12 +275,19 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     shadowColor.lerp(targetShadow.current, 0.04);
 
     const audio = getSpeakingIntensity();
-    // Bigger breathing (15% amplitude) + audio-driven extra
-    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.08;
+    // Heartbeat breathing: slow, deep double-thump
+    const hb = t * 0.55;
+    const beat = Math.pow(Math.max(0, Math.sin(hb)), 3) + 0.55 * Math.pow(Math.max(0, Math.sin(hb + 0.35)), 4);
+    const breath = 0.92 + beat * 0.28 + audio * 0.1;
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.0012 + audio * 0.004;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
       groupRef.current.scale.setScalar(breath);
+    }
+
+    // Core glow pulse synced to heartbeat
+    if (coreMatRef.current) {
+      coreMatRef.current.opacity = 0.18 + beat * 0.35 + audio * 0.2;
     }
 
     // Wave propagation from chat events
@@ -348,9 +361,33 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    if (lineMatRef.current) {
-      lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
-      lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
+    // Decay all edge glows + write vertex colors
+    const dt = Math.min(0.05, clock.getDelta?.() ?? 1 / 60);
+    // Note: getDelta is on the clock; use its native API safely
+    const decay = Math.exp(-TRAIL_DECAY * (1 / 60));
+    const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
+    const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
+    const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
+    const hiR = highlightColor.r;
+    const hiG = highlightColor.g;
+    const hiB = highlightColor.b;
+    if (lineGeomRef.current) {
+      const colorAttr = lineGeomRef.current.getAttribute("color") as THREE.BufferAttribute | undefined;
+      if (colorAttr) {
+        const arr = colorAttr.array as Float32Array;
+        for (let e = 0; e < edges.length; e++) {
+          edgeGlow[e] *= decay;
+          const g = edgeGlow[e];
+          // Lift base brightness slightly with heartbeat
+          const ambient = 0.55 + beat * 0.25;
+          const r = baseR * ambient + (hiR - baseR * ambient) * g;
+          const gg = baseG * ambient + (hiG - baseG * ambient) * g;
+          const b = baseB * ambient + (hiB - baseB * ambient) * g;
+          arr[e * 6 + 0] = r; arr[e * 6 + 1] = gg; arr[e * 6 + 2] = b;
+          arr[e * 6 + 3] = r; arr[e * 6 + 4] = gg; arr[e * 6 + 5] = b;
+        }
+        colorAttr.needsUpdate = true;
+      }
     }
 
     // Spawn pulses (denser ambient firing, more during speech)
@@ -396,29 +433,65 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
     setPulses((prev) =>
       prev
-        .map((p) => ({ ...p, progress: p.progress + p.speed }))
+        .map((p) => {
+          const next = p.progress + p.speed;
+          // Bump glow on the edge as the pulse traverses it
+          edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+          return { ...p, progress: next };
+        })
         .filter((p) => p.progress <= 1)
     );
   });
 
   return (
     <group ref={groupRef}>
+      {/* Volumetric core glow — pulses originate from here */}
+      <mesh>
+        <sphereGeometry args={[0.55, 32, 32]} />
+        <meshBasicMaterial
+          ref={coreMatRef}
+          color={colors.highlight}
+          transparent
+          opacity={0.25}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[1.1, 32, 32]} />
+        <meshBasicMaterial
+          color={colors.mid}
+          transparent
+          opacity={0.05}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+
       <lineSegments>
-        <bufferGeometry>
+        <bufferGeometry ref={lineGeomRef}>
           <bufferAttribute
             attach="attributes-position"
             count={edgePositions.length / 3}
             array={edgePositions}
             itemSize={3}
           />
+          <bufferAttribute
+            attach="attributes-color"
+            count={edgePositions.length / 3}
+            array={edgeColors}
+            itemSize={3}
+          />
         </bufferGeometry>
         <lineBasicMaterial
-          ref={lineMatRef}
-          color={colors.mid}
+          vertexColors
           transparent
-          opacity={0.18}
+          opacity={0.85}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          toneMapped={false}
         />
       </lineSegments>
 
@@ -429,7 +502,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         <sphereGeometry args={[1, 8, 8]} />
         <meshBasicMaterial
           transparent
-          opacity={0.95}
+          opacity={0.7}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           toneMapped={false}
@@ -446,7 +519,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const intensity = Math.sin(p.progress * Math.PI);
         return (
           <mesh key={p.id} position={[x, y, z]}>
-            <sphereGeometry args={[0.028, 8, 8]} />
+            <sphereGeometry args={[0.022, 8, 8]} />
             <meshBasicMaterial
               color={colors.highlight}
               transparent
