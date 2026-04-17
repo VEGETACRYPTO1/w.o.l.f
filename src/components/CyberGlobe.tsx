@@ -291,8 +291,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     shadowColor.lerp(targetShadow.current, 0.04);
 
     const audio = getSpeakingIntensity();
-    // Bigger breathing (15% amplitude) + audio-driven extra
-    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.08;
+    // Heartbeat breathing: slower, deeper double-beat
+    const heartbeat =
+      Math.pow(Math.max(0, Math.sin(t * 0.45)), 2) * 0.22 +
+      Math.pow(Math.max(0, Math.sin(t * 0.45 + 0.35)), 4) * 0.10;
+    const breath = 0.92 + heartbeat + audio * 0.12;
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.0012 + audio * 0.004;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
