@@ -8,7 +8,9 @@ export function AppLayout({ children, dissolving = false }: { children: React.Re
 
   return (
     <div className="min-h-screen flex w-full relative">
-      <CyberGlobe dissolving={dissolving} />
+      <div data-bh className="absolute inset-0">
+        <CyberGlobe dissolving={dissolving} />
+      </div>
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
         <main className={`flex-1 overflow-auto ${isDashboard ? "relative" : "p-6"}`}>
           {children}

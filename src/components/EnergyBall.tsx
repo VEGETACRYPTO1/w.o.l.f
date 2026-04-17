@@ -18,7 +18,7 @@ function Bloom() {
     const c = new EffectComposer(gl);
     c.addPass(new RenderPass(scene, camera));
     // Tighter, sharper bloom — like brain nodes, not a glowing blob
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.9, 0.4, 0.15));
+    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 1.6, 0.55, 0.05));
     composer.current = c;
     return () => c.dispose();
   }, [gl, scene, camera, size]);
@@ -91,7 +91,6 @@ function Orb({ phase }: { phase: WakePhase }) {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
   const innerRef = useRef<THREE.Mesh>(null);
-  const glowRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
 
   // Bigger pool but tiny particles → cinematic spray
@@ -142,29 +141,30 @@ function Orb({ phase }: { phase: WakePhase }) {
 
     if (p === "waking") {
       const a = phaseAge;
-      if (a < 0.5) {
-        // Charge: compress slightly, brighten hard, spin up
-        const k = a / 0.5;
-        sizeMul = 1 - k * 0.35 + k * k * 0.1;
-        intensityMul = 1 + k * 3.5;
-        rotSpeed = 0.3 + k * 6;
+      if (a < 1.0) {
+        // Long cinematic charge: compress, brighten, spin up
+        const k = a / 1.0;
+        const eased = k * k;
+        sizeMul = 1 - eased * 0.45;
+        intensityMul = 1 + eased * 4.5;
+        rotSpeed = 0.3 + eased * 8;
         opacityMul = 1;
-      } else if (a < 0.6) {
-        // Snap: implode + explode
+      } else if (a < 1.15) {
+        // Snap: implode + explode flash
         sizeMul = 0.0;
-        intensityMul = 5;
+        intensityMul = 6;
         opacityMul = 0;
       } else {
-        // Fade out remnant
-        const k = Math.min(1, (a - 0.6) / 1.0);
+        // Smooth fade-out remnant overlapping with brain forming
+        const k = Math.min(1, (a - 1.15) / 1.2);
         sizeMul = 0;
         opacityMul = Math.max(0, 1 - k);
       }
     }
 
-    // Subtle shake during charge
-    const shake = p === "waking" && phaseAge < 0.5
-      ? (Math.random() - 0.5) * 0.025 * (phaseAge / 0.5)
+    // Cinematic shake — ramps up through the charge phase
+    const shake = p === "waking" && phaseAge < 1.0
+      ? (Math.random() - 0.5) * 0.06 * Math.pow(phaseAge / 1.0, 2)
       : 0;
 
     if (groupRef.current) {
@@ -182,19 +182,12 @@ function Orb({ phase }: { phase: WakePhase }) {
       m.color.copy(GOLD_HI).lerp(WHITE, Math.min(1, (intensityMul - 1) * 0.4));
       m.opacity = opacityMul;
     }
-    // Hot inner pinpoint (the "node center")
+    // Hot inner pinpoint — pure brightness, no second shape
     if (innerRef.current) {
-      const s = 0.035 * breath * sizeMul;
+      const s = 0.04 * breath * sizeMul * (1 + audio * 0.2);
       innerRef.current.scale.setScalar(s);
       const m = innerRef.current.material as THREE.MeshBasicMaterial;
-      m.opacity = opacityMul;
-    }
-    // Single tight glow halo (replaces the cartoon double-halo + ring)
-    if (glowRef.current) {
-      const s = 0.13 * breath * sizeMul * (1 + audio * 0.3);
-      glowRef.current.scale.setScalar(s);
-      const m = glowRef.current.material as THREE.MeshBasicMaterial;
-      m.opacity = (0.35 + audio * 0.25) * opacityMul * Math.min(1.5, intensityMul) * 0.7;
+      m.opacity = opacityMul * Math.min(1.5, intensityMul);
     }
 
     // Particles
@@ -227,18 +220,6 @@ function Orb({ phase }: { phase: WakePhase }) {
 
   return (
     <group ref={groupRef}>
-      {/* Tight glow (single, subtle) */}
-      <mesh ref={glowRef}>
-        <sphereGeometry args={[1, 24, 24]} />
-        <meshBasicMaterial
-          color={GOLD}
-          transparent
-          opacity={0.35}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
       {/* Faceted core — matches brain node geometry */}
       <mesh ref={coreRef}>
         <icosahedronGeometry args={[1, 1]} />
