@@ -252,6 +252,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   // Subscribe to mode burst — radial shockwave from center
   useEffect(() => {
     const off = onModeBurst((color) => {
+      console.log("💥 BURST", color);
       burstColor.current.set(color);
       burstStart.current = performance.now() / 1000;
       burstActive.current = true;
@@ -263,8 +264,10 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const burst: Pulse[] = [];
       for (const { i: idx } of centerNodes) {
         const adj = edgesByNode[idx];
+        if (!adj || adj.length === 0) continue;
         for (let k = 0; k < Math.min(adj.length, 3); k++) {
           const edgeIdx = adj[k];
+          if (edgeIdx == null || !edges[edgeIdx]) continue;
           const [ei, ej] = edges[edgeIdx];
           const toNode = ei === idx ? ej : ei;
           // Pick the outward-facing direction
