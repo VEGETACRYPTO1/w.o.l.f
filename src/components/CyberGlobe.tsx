@@ -189,7 +189,21 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const firingPhases = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
 
-    return { nodes, edges, edgePositions, firingPhases, edgesByNode };
+    // Core node indices (close to center) — pulses originate here
+    const coreNodes: number[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].length() < CORE_RADIUS) coreNodes.push(i);
+    }
+
+    // Precompute outward direction for each edge: which endpoint is farther from center
+    // outwardEdgeDir[e] = 1 if going from edges[e][0] -> edges[e][1] is outward, else 0 (reverse)
+    const outwardEdgeDir = new Uint8Array(edges.length);
+    for (let e = 0; e < edges.length; e++) {
+      const [i, j] = edges[e];
+      outwardEdgeDir[e] = nodes[j].length() >= nodes[i].length() ? 1 : 0;
+    }
+
+    return { nodes, edges, edgePositions, firingPhases, edgesByNode, coreNodes, outwardEdgeDir };
   }, []);
 
   const [pulses, setPulses] = useState<Pulse[]>([]);
