@@ -144,7 +144,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const HOVER_RADIUS = 0.9;
   const TRAIL_DECAY = 1.6; // higher = faster fade
 
-  const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
+  const { nodes, edges, edgePositions, edgeColors, firingPhases, edgesByNode } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
 
     const edges: [number, number][] = [];
