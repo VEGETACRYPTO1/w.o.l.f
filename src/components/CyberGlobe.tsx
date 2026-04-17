@@ -142,6 +142,13 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   const HOVER_RADIUS = 0.9;
   const TRAIL_DECAY = 1.6;
 
+  // Ripple: per-node phase offsets for sine wave oscillation
+  const ripplePhases = useMemo(() => {
+    const arr = new Float32Array(NODE_COUNT);
+    for (let i = 0; i < NODE_COUNT; i++) arr[i] = Math.random() * Math.PI * 2;
+    return arr;
+  }, []);
+
   const { nodes, edges, edgePositions, edgeColors, firingPhases, edgesByNode } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
     const edges: [number, number][] = [];
@@ -305,6 +312,10 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const tmpColor = useMemo(() => new THREE.Color(), []);
 
+  // Ripple amplitude — subtle, won't look jelly
+  const RIPPLE_AMP = 0.04;
+  const RIPPLE_SPEED = 0.6;
+
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
@@ -320,8 +331,6 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     }
 
     const dissolveAge = dissolveStartRef.current !== null ? performance.now() / 1000 - dissolveStartRef.current : -1;
-
-    // ── FIX: slower dissolve with black hole easing ──
     const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 2.8) : 0;
     const dissolveEase =
       dissolveProgress < 0.6
@@ -336,7 +345,6 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     const breath = 1 + Math.sin(t * 0.7) * 0.22 + audio * 0.08;
 
     if (groupRef.current) {
-      // ── FIX: spiral motion on dissolve ──
       groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.25;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08 + dissolveEase * 0.4;
       const formScale = formEase;
@@ -423,7 +431,14 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
         }
         if (waveBoost > 0.3) tmpColor.lerp(whiteColor, waveBoost * 0.5);
 
-        dummy.position.copy(nodes[i]);
+        // ── RIPPLE: oscillate node position along its normal ──
+        const rPhase = ripplePhases[i];
+        const ripple = Math.sin(t * RIPPLE_SPEED + rPhase) * RIPPLE_AMP;
+        const nx = nodes[i].x,
+          ny = nodes[i].y,
+          nz = nodes[i].z;
+        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        dummy.position.set(nx + (nx / nLen) * ripple, ny + (ny / nLen) * ripple, nz + (nz / nLen) * ripple);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         nodeMeshRef.current.setMatrixAt(i, dummy.matrix);
@@ -433,19 +448,44 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
       if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    const decay = Math.exp(-TRAIL_DECAY * (1 / 60));
-    const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
-    const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
-    const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
-    const tintAmt = burstOn ? Math.sin(burstProgress * Math.PI) : 0;
-    const hiR = highlightColor.r + (burstColor.current.r - highlightColor.r) * tintAmt;
-    const hiG = highlightColor.g + (burstColor.current.g - highlightColor.g) * tintAmt;
-    const hiB = highlightColor.b + (burstColor.current.b - highlightColor.b) * tintAmt;
-
+    // ── RIPPLE: update edge positions to match oscillating nodes ──
     if (lineGeomRef.current) {
+      const posAttr = lineGeomRef.current.getAttribute("position") as THREE.BufferAttribute;
+      if (posAttr) {
+        const posArr = posAttr.array as Float32Array;
+        for (let e = 0; e < edges.length; e++) {
+          const [i, j] = edges[e];
+          const rA = Math.sin(t * RIPPLE_SPEED + ripplePhases[i]) * RIPPLE_AMP;
+          const rB = Math.sin(t * RIPPLE_SPEED + ripplePhases[j]) * RIPPLE_AMP;
+          const ax = nodes[i].x,
+            ay = nodes[i].y,
+            az = nodes[i].z;
+          const bx = nodes[j].x,
+            by = nodes[j].y,
+            bz = nodes[j].z;
+          const aLen = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+          const bLen = Math.sqrt(bx * bx + by * by + bz * bz) || 1;
+          posArr[e * 6 + 0] = ax + (ax / aLen) * rA;
+          posArr[e * 6 + 1] = ay + (ay / aLen) * rA;
+          posArr[e * 6 + 2] = az + (az / aLen) * rA;
+          posArr[e * 6 + 3] = bx + (bx / bLen) * rB;
+          posArr[e * 6 + 4] = by + (by / bLen) * rB;
+          posArr[e * 6 + 5] = bz + (bz / bLen) * rB;
+        }
+        posAttr.needsUpdate = true;
+      }
+
       const colorAttr = lineGeomRef.current.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (colorAttr) {
         const arr = colorAttr.array as Float32Array;
+        const decay = Math.exp(-TRAIL_DECAY * (1 / 60));
+        const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
+        const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
+        const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
+        const tintAmt = burstOn ? Math.sin(burstProgress * Math.PI) : 0;
+        const hiR = highlightColor.r + (burstColor.current.r - highlightColor.r) * tintAmt;
+        const hiG = highlightColor.g + (burstColor.current.g - highlightColor.g) * tintAmt;
+        const hiB = highlightColor.b + (burstColor.current.b - highlightColor.b) * tintAmt;
         for (let e = 0; e < edges.length; e++) {
           edgeGlow[e] *= decay;
           const g = edgeGlow[e];
