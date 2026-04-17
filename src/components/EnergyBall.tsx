@@ -1,12 +1,11 @@
 import { useRef, useMemo, useEffect } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { useThree } from "@react-three/fiber";
 import { getSpeakingIntensity } from "@/lib/brainEvents";
-import { useWake } from "@/contexts/WakeContext";
+import type { WakePhase } from "@/contexts/WakeContext";
 
 const GOLD = new THREE.Color("#FFD36B");
 const GOLD_HI = new THREE.Color("#FFE9A8");
@@ -18,12 +17,60 @@ function Bloom() {
   useEffect(() => {
     const c = new EffectComposer(gl);
     c.addPass(new RenderPass(scene, camera));
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 1.6, 0.7, 0.05));
+    // Tighter, sharper bloom — like brain nodes, not a glowing blob
+    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.9, 0.4, 0.15));
     composer.current = c;
     return () => c.dispose();
   }, [gl, scene, camera, size]);
   useFrame(() => composer.current?.render(), 1);
   return null;
+}
+
+// ── Sparse deep-space starfield ──
+function Starfield() {
+  const ref = useRef<THREE.Points>(null);
+  const { positions, sizes } = useMemo(() => {
+    const COUNT = 350;
+    const positions = new Float32Array(COUNT * 3);
+    const sizes = new Float32Array(COUNT);
+    for (let i = 0; i < COUNT; i++) {
+      // distribute on a far sphere shell
+      const u = Math.random();
+      const v = Math.random();
+      const theta = 2 * Math.PI * u;
+      const phi = Math.acos(2 * v - 1);
+      const r = 8 + Math.random() * 6;
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      positions[i * 3 + 2] = r * Math.cos(phi) - 4;
+      sizes[i] = 0.015 + Math.random() * 0.025;
+    }
+    return { positions, sizes };
+  }, []);
+
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return g;
+  }, [positions]);
+
+  useFrame((_, dt) => {
+    if (ref.current) ref.current.rotation.y += dt * 0.005;
+  });
+
+  return (
+    <points ref={ref} geometry={geom}>
+      <pointsMaterial
+        color="#ffffff"
+        size={0.025}
+        transparent
+        opacity={0.7}
+        sizeAttenuation
+        depthWrite={false}
+        toneMapped={false}
+      />
+    </points>
+  );
 }
 
 interface Particle {
@@ -32,8 +79,7 @@ interface Particle {
   life: number;
 }
 
-function Orb() {
-  const { phase } = useWake();
+function Orb({ phase }: { phase: WakePhase }) {
   const phaseRef = useRef(phase);
   const phaseStartRef = useRef(performance.now() / 1000);
   useEffect(() => {
@@ -45,16 +91,13 @@ function Orb() {
   const groupRef = useRef<THREE.Group>(null);
   const coreRef = useRef<THREE.Mesh>(null);
   const innerRef = useRef<THREE.Mesh>(null);
-  const halo1Ref = useRef<THREE.Mesh>(null);
-  const halo2Ref = useRef<THREE.Mesh>(null);
-  const ringRef = useRef<THREE.Mesh>(null);
+  const glowRef = useRef<THREE.Mesh>(null);
   const particlesRef = useRef<THREE.Points>(null);
 
-  // Particle system: bigger pool for cinematic burst
-  const POOL = 220;
+  // Bigger pool but tiny particles → cinematic spray
+  const POOL = 600;
   const positions = useMemo(() => new Float32Array(POOL * 3), []);
   const colorsArr = useMemo(() => new Float32Array(POOL * 3), []);
-  const sizesArr = useMemo(() => new Float32Array(POOL), []);
   const particleGeom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -71,7 +114,7 @@ function Orb() {
         Math.random() - 0.5,
         Math.random() - 0.5
       ).normalize();
-      const speed = 1.8 + Math.random() * 3.5;
+      const speed = 2.5 + Math.random() * 4.5;
       arr.push({
         pos: new THREE.Vector3(0, 0, 0),
         vel: dir.multiplyScalar(speed),
@@ -89,84 +132,69 @@ function Orb() {
     const phaseAge = t - phaseStartRef.current;
     const p = phaseRef.current;
 
-    // Idle breathing — same rhythm as brain nodes
-    const breath = 1 + Math.sin(t * 0.7) * 0.18 + audio * 0.3;
+    // Slow breath, subtle audio reactivity
+    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.25;
 
-    // Phase-driven scale/intensity multipliers
     let sizeMul = 1;
     let intensityMul = 1;
-    let rotSpeed = 0.35;
+    let rotSpeed = 0.3;
     let opacityMul = 1;
 
     if (p === "waking") {
-      // Cinematic charge: 0..0.45s charge up (grow + shake + brighten),
-      // 0.45..0.55s explode (snap small),
-      // 0.55..1.6s fade
       const a = phaseAge;
-      if (a < 0.45) {
-        const k = a / 0.45;
-        sizeMul = 1 + k * k * 1.6;          // accelerate growth
-        intensityMul = 1 + k * 2.8;
-        rotSpeed = 0.35 + k * 4;
+      if (a < 0.5) {
+        // Charge: compress slightly, brighten hard, spin up
+        const k = a / 0.5;
+        sizeMul = 1 - k * 0.35 + k * k * 0.1;
+        intensityMul = 1 + k * 3.5;
+        rotSpeed = 0.3 + k * 6;
         opacityMul = 1;
-      } else if (a < 0.55) {
-        sizeMul = 0.05;                      // imploded → about to burst out
-        intensityMul = 4;
-        opacityMul = 0.0;                    // hide core, particles take over
+      } else if (a < 0.6) {
+        // Snap: implode + explode
+        sizeMul = 0.0;
+        intensityMul = 5;
+        opacityMul = 0;
       } else {
-        const k = Math.min(1, (a - 0.55) / 1.0);
+        // Fade out remnant
+        const k = Math.min(1, (a - 0.6) / 1.0);
         sizeMul = 0;
         opacityMul = Math.max(0, 1 - k);
       }
-    } else if (p === "sleeping") {
-      // Idle
     }
 
-    // Apply tiny random shake during charge
-    const shake = p === "waking" && phaseAge < 0.45
-      ? (Math.random() - 0.5) * 0.03 * (phaseAge / 0.45)
+    // Subtle shake during charge
+    const shake = p === "waking" && phaseAge < 0.5
+      ? (Math.random() - 0.5) * 0.025 * (phaseAge / 0.5)
       : 0;
 
     if (groupRef.current) {
       groupRef.current.rotation.y += rotSpeed * dt;
-      groupRef.current.rotation.x = Math.sin(t * 0.4) * 0.15;
+      groupRef.current.rotation.x = Math.sin(t * 0.4) * 0.12;
       groupRef.current.position.x = shake;
       groupRef.current.position.y = shake * 0.7;
     }
 
-    // Core (icosahedron, like a brain node but larger)
+    // Core: small faceted icosahedron — same as a brain node, just slightly bigger
     if (coreRef.current) {
-      const s = 0.13 * breath * sizeMul;
+      const s = 0.07 * breath * sizeMul;
       coreRef.current.scale.setScalar(s);
       const m = coreRef.current.material as THREE.MeshBasicMaterial;
       m.color.copy(GOLD_HI).lerp(WHITE, Math.min(1, (intensityMul - 1) * 0.4));
-      m.opacity = 1 * opacityMul;
+      m.opacity = opacityMul;
     }
+    // Hot inner pinpoint (the "node center")
     if (innerRef.current) {
-      const s = 0.07 * breath * sizeMul;
+      const s = 0.035 * breath * sizeMul;
       innerRef.current.scale.setScalar(s);
       const m = innerRef.current.material as THREE.MeshBasicMaterial;
-      m.opacity = 1 * opacityMul;
+      m.opacity = opacityMul;
     }
-    if (halo1Ref.current) {
-      const s = 0.28 * breath * sizeMul * (1 + audio * 0.3);
-      halo1Ref.current.scale.setScalar(s);
-      const m = halo1Ref.current.material as THREE.MeshBasicMaterial;
-      m.opacity = (0.55 + audio * 0.3) * opacityMul * intensityMul * 0.5;
-    }
-    if (halo2Ref.current) {
-      const s = 0.5 * breath * sizeMul * (1 + audio * 0.5);
-      halo2Ref.current.scale.setScalar(s);
-      const m = halo2Ref.current.material as THREE.MeshBasicMaterial;
-      m.opacity = (0.22 + audio * 0.25) * opacityMul * intensityMul * 0.5;
-    }
-    if (ringRef.current) {
-      // Faint outer corona ring during charge
-      const ringS = 0.7 * breath * sizeMul;
-      ringRef.current.scale.setScalar(ringS);
-      ringRef.current.rotation.z += dt * 0.4;
-      const m = ringRef.current.material as THREE.MeshBasicMaterial;
-      m.opacity = (0.08 + (intensityMul - 1) * 0.12) * opacityMul;
+    // Single tight glow halo (replaces the cartoon double-halo + ring)
+    if (glowRef.current) {
+      const s = 0.13 * breath * sizeMul * (1 + audio * 0.3);
+      glowRef.current.scale.setScalar(s);
+      const m = glowRef.current.material as THREE.MeshBasicMaterial;
+      m.opacity = (0.35 + audio * 0.25) * opacityMul * Math.min(1.5, intensityMul) * 0.7;
     }
 
     // Particles
@@ -177,14 +205,13 @@ function Orb() {
         if (!part) continue;
         if (part.life > 0) anyAlive = true;
         part.pos.addScaledVector(part.vel, dt);
-        part.vel.multiplyScalar(0.965);
-        part.life -= dt * 0.7;
+        part.vel.multiplyScalar(0.955);
+        part.life -= dt * 0.8;
         positions[i * 3] = part.pos.x;
         positions[i * 3 + 1] = part.pos.y;
         positions[i * 3 + 2] = part.pos.z;
         const life = Math.max(0, part.life);
-        // color: white-hot core → gold tail
-        const c = GOLD.clone().lerp(WHITE, life);
+        const c = GOLD.clone().lerp(WHITE, life * life);
         colorsArr[i * 3] = c.r;
         colorsArr[i * 3 + 1] = c.g;
         colorsArr[i * 3 + 2] = c.b;
@@ -200,44 +227,19 @@ function Orb() {
 
   return (
     <group ref={groupRef}>
-      {/* Outer ring corona (rare, charge-only really visible) */}
-      <mesh ref={ringRef} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.95, 1.0, 64]} />
+      {/* Tight glow (single, subtle) */}
+      <mesh ref={glowRef}>
+        <sphereGeometry args={[1, 24, 24]} />
         <meshBasicMaterial
           color={GOLD}
           transparent
-          opacity={0.08}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {/* Outer halo */}
-      <mesh ref={halo2Ref}>
-        <sphereGeometry args={[1, 32, 32]} />
-        <meshBasicMaterial
-          color={GOLD}
-          transparent
-          opacity={0.22}
+          opacity={0.35}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           toneMapped={false}
         />
       </mesh>
-      {/* Inner halo */}
-      <mesh ref={halo1Ref}>
-        <sphereGeometry args={[1, 32, 32]} />
-        <meshBasicMaterial
-          color={GOLD_HI}
-          transparent
-          opacity={0.55}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
-      {/* Core (faceted, like brain nodes) */}
+      {/* Faceted core — matches brain node geometry */}
       <mesh ref={coreRef}>
         <icosahedronGeometry args={[1, 1]} />
         <meshBasicMaterial
@@ -249,7 +251,7 @@ function Orb() {
           toneMapped={false}
         />
       </mesh>
-      {/* Hot inner pinpoint */}
+      {/* Hot pinpoint */}
       <mesh ref={innerRef}>
         <sphereGeometry args={[1, 16, 16]} />
         <meshBasicMaterial
@@ -261,11 +263,11 @@ function Orb() {
           toneMapped={false}
         />
       </mesh>
-      {/* Burst particles */}
+      {/* Burst particles — small, fast, many */}
       <points ref={particlesRef} geometry={particleGeom}>
         <pointsMaterial
           vertexColors
-          size={0.07}
+          size={0.025}
           transparent
           opacity={0}
           sizeAttenuation
@@ -278,18 +280,14 @@ function Orb() {
   );
 }
 
-export function EnergyBall() {
-  const { phase } = useWake();
-  // Canvas itself stays mounted whenever orb is needed.
-  // Background is transparent so the existing star backdrop (CyberGlobe stars) shows
-  // through during sleeping-out — making the suction feel continuous with the brain scene.
+export function EnergyBall({ phase }: { phase: WakePhase }) {
   const showCanvas = phase === "sleeping" || phase === "waking" || phase === "sleeping-out";
   if (!showCanvas) return null;
 
   return (
     <div
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: 60 }}
+      style={{ zIndex: 60, background: "#000" }}
     >
       <Canvas
         camera={{ position: [0, 0, 3], fov: 50 }}
@@ -297,7 +295,8 @@ export function EnergyBall() {
         style={{ background: "transparent" }}
       >
         <Bloom />
-        <Orb />
+        <Starfield />
+        <Orb phase={phase} />
       </Canvas>
     </div>
   );
