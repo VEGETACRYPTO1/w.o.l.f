@@ -514,8 +514,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const children: Pulse[] = [];
       const MAX_GENERATION = 4;
       for (const p of prev) {
+        if (!edges[p.edgeIdx] || !nodes[p.toNode]) continue;
         const next = p.progress + p.speed;
-        edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+        if (p.edgeIdx < edgeGlow.length) {
+          edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+        }
         if (next <= 1) {
           survivors.push({ ...p, progress: next });
         } else if (
@@ -525,12 +528,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         ) {
           // Chain: spawn 1-2 child pulses on edges connected to the destination node
           const adj = edgesByNode[p.toNode];
+          if (!adj) continue;
           // Avoid going back along the same edge
           const candidates = adj.filter((e) => e !== p.edgeIdx);
           if (candidates.length > 0) {
             const childCount = 1 + (Math.random() < 0.4 ? 1 : 0);
             for (let k = 0; k < childCount && k < candidates.length; k++) {
               const pick = candidates[Math.floor(Math.random() * candidates.length)];
+              if (!edges[pick]) continue;
               const [ei, ej] = edges[pick];
               children.push({
                 id: pulseId++,
