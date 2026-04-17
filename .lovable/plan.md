@@ -1,76 +1,71 @@
 
-**Goal:** Add a sleep/wake gate in front of the main app. Initial load shows only a centered breathing energy ball. Voice command transitions in/out of the full brain UI.
+**Goal:** Rework the visuals so the sleep screen and transitions feel premium, minimal, and cinematic instead of cartoonish.
 
----
+### 1) Stabilize the wake system first
+- Fix the `useWake must be used within WakeProvider` crash by removing direct `useWake()` usage from deep canvas children and passing `phase` into `EnergyBall`/`Orb` as props from `WakeGate`.
+- This ensures the preview stays alive while polishing the visuals.
 
-### Architecture
+### 2) Simplify the orb to match the neural core
+**Files:** `src/components/EnergyBall.tsx`
+- Strip out the cartoon elements:
+  - remove the outer ring
+  - remove the large soft background halo layers
+  - keep only a smaller faceted core + a very tight node-like glow
+- Reduce core size by about 50%.
+- Match the neural node look exactly:
+  - same intelligence gold palette
+  - sharp faceted geometry
+  - subtle bloom, not a big glowing blob
+  - slow breathing + rotation + mic-reactive pulse
 
-**New: `src/contexts/WakeContext.tsx`**
-- State: `wakePhase: "sleeping" | "waking" | "awake" | "sleeping-out"`
-- Persisted to `localStorage` so refresh returns to last state (default: `sleeping`)
-- Actions: `wake()`, `sleep()`
+### 3) Put the orb in deep space, not on a fake glow backdrop
+**Files:** `src/components/EnergyBall.tsx`
+- Add a sparse starfield behind the orb inside the sleep/wake scene.
+- Keep it minimal: tiny white stars, low density, dark empty space around them.
+- No big gradient plate behind the orb.
 
-**New: `src/components/EnergyBall.tsx`**
-- Standalone full-screen `<Canvas>` with black background
-- Single small icosahedron (~size of one brain node, centered) + soft additive halo sprite
-- Color: intelligence-mode gold (`#ffd700`) — same look/feel as brain nodes
-- Behaviors:
-  - Breathes (sine scale) — same rhythm as brain nodes
-  - Slowly rotates on Y axis
-  - Pulses brighter on mic input via `getSpeakingIntensity()` from `brainEvents`
-- Animation phases driven by `wakePhase`:
-  - `sleeping` → idle breathe + rotate
-  - `waking` → quick scale-up flash, particle burst outward (~60 particles fly out + fade), then ball fades out → calls `wake complete`
-  - `sleeping-out` → ball pulses bright, ready to receive (visual only — actual implosion handled on brain side)
+### 4) Rebuild the wake transition to feel cinematic
+**Files:** `src/components/EnergyBall.tsx`, `src/App.tsx`, `src/components/CyberGlobe.tsx`
+- Replace the current chunky burst with:
+  - a short charge-up/compression phase
+  - tighter brightness ramp
+  - many smaller, faster particles
+  - cleaner fade from orb into brain
+- Make the brain feel like it is emerging from the orb, not switching abruptly.
+- Use a short overlap: orb collapses/erupts while the brain fades/forms in.
 
-**New: `src/components/SleepWakeListener.tsx`**
-- Lightweight `SpeechRecognition` always-on listener
-- Phrases:
-  - When `sleeping`: "wake up" / "wolf" / "hey wolf" → `wake()`
-  - When `awake`: "go to sleep" / "sleep" → `sleep()` + call `stopHandsFree()` from `wolfVoice` to kill mic
-- Auto-restarts on `onend`/`onerror` (same pattern as `wolfVoice`)
-- Only one instance mounted at a time to avoid Web Speech conflicts
+### 5) Rebuild sleep into a real black-hole pull
+**Files:** `src/App.tsx`, `src/index.css`, `src/components/CyberGlobe.tsx`, `src/components/ChatOverlay.tsx`, `src/pages/Dashboard.tsx`
+- Make the suction visible across the whole HUD:
+  - chat trigger
+  - chat panel
+  - W.O.L.F title
+  - date/time
+  - other marked UI
+- Upgrade the current effect from simple shrink/fade into a proper spiral pull:
+  - translate toward center
+  - increasing spin
+  - scale collapse
+  - blur/brightness stretch
+- At the same time, make the brain itself collapse inward more aggressively so the whole app feels dragged into the same core.
+- End with the orb re-forming cleanly at center.
 
-**Modify `src/App.tsx`**
-- Wrap with `<WakeProvider>`
-- Conditional render based on `wakePhase`:
-  - `sleeping` or `waking` → render `<EnergyBall />` + `<SleepWakeListener />` only (no router, no layout)
-  - `awake` → render existing `<BrowserRouter><AppLayout>...</AppLayout></BrowserRouter>` with `animate-fade-in`, plus `<SleepWakeListener />`
-  - `sleeping-out` → render BOTH: AppLayout fading out + brain dissolve animation, then EnergyBall fades in
-- Transition orchestration in a small `useEffect` based on phase
+### 6) Tighten the main globe scene
+**Files:** `src/components/CyberGlobe.tsx`
+- Keep the neural core as the hero.
+- Tone down any extra visual clutter around it so the scene feels cleaner and more expensive.
+- Preserve the existing core quality while making the transition into/out of it smoother.
 
-**Modify `src/components/CyberGlobe.tsx` (minimal additive)**
-- Accept optional `dissolving: boolean` prop
-- When `true`: animate all node positions toward center (lerp), shrink scale to 0, fade opacity over ~1s — "black hole" effect
-- When mount happens after wake: brief "forming" animation — nodes scale from 0 → 1 over ~1s with slight outward spawn
-
-**Modify `src/lib/wolfVoice.ts`**
-- No behavioral changes; just ensure `stopHandsFree()` is callable from `SleepWakeListener` (already exported ✓)
-
----
-
-### Transition Sequences
-
-**Wake** (`sleeping` → `awake`):
-1. User says "wake up" → `wake()` sets phase to `waking`
-2. EnergyBall plays burst animation (~800ms): scale up, particle explosion, fade out
-3. Phase set to `awake` → AppLayout mounts with `fade-in`, brain plays "forming" animation
-
-**Sleep** (`awake` → `sleeping`):
-1. User says "go to sleep" → `sleep()` sets phase to `sleeping-out`, calls `stopHandsFree()`
-2. Brain plays "black hole" dissolve (~1s): nodes spiral to center, shrink, fade
-3. AppLayout fades out simultaneously
-4. EnergyBall fades in at center
-5. Phase set to `sleeping` → only EnergyBall remains
-
----
-
-### Files
-- **New**: `src/contexts/WakeContext.tsx`
-- **New**: `src/components/EnergyBall.tsx`
-- **New**: `src/components/SleepWakeListener.tsx`
-- **Edit**: `src/App.tsx` (wrap + conditional render)
-- **Edit**: `src/components/CyberGlobe.tsx` (add `dissolving` prop + forming animation)
+### Technical notes
+- Keep within the existing Three.js / React Three Fiber setup.
+- Do not redesign the whole system; this is a visual quality pass on:
+  - `EnergyBall`
+  - wake/sleep transition timing
+  - black-hole motion
+  - neural-core presentation
+- Reuse the current gold neural palette and minimal HUD style from project memory.
 
 ### Result
-Refresh → black screen, small gold breathing/rotating orb in center, reacts to your voice. Say "wake up" → bursts into particles, brain UI fades in. Say "go to sleep" → brain spirals into orb like a black hole, mic off, only orb remains. State persists across refreshes.
+- Sleep screen: small premium gold orb in deep space, breathing and rotating, no cartoon glow plate.
+- Wake: tense charge → sharp cinematic burst → brain/UI materialize smoothly.
+- Sleep: entire UI and brain visibly spiral inward like a black hole and reform into the orb.
