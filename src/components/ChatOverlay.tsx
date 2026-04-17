@@ -8,6 +8,7 @@ import ReactMarkdown from "react-markdown";
 import { resetSphere } from "@/components/CyberGlobe";
 import { handleMemoryAction, openTab } from "@/lib/wolfMemory";
 import { speak } from "@/lib/wolfVoice";
+import { emitBrainEvent } from "@/lib/brainEvents";
 
 export function ChatOverlay() {
   const [open, setOpen] = useState(false);
@@ -69,6 +70,7 @@ export function ChatOverlay() {
     setMessages(newMessages);
     setInput("");
     setShowModeSelector(false);
+    emitBrainEvent("wave");
 
     setIsLoading(true);
     let assistantSoFar = "";
@@ -91,6 +93,7 @@ export function ChatOverlay() {
       onDone: () => {
         setIsLoading(false);
         if (assistantSoFar) {
+          emitBrainEvent("wave");
           setTimeout(() => (window as any).wolfSpeak?.(assistantSoFar) || speak(assistantSoFar), 50);
         }
       },

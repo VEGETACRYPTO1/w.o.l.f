@@ -125,8 +125,15 @@ function wolfSpeak(text: string): Promise<void> {
       utter.rate = 1.12;
       utter.pitch = 0.95;
       utter.volume = 1;
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
+      const finish = () => {
+        import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
+        resolve();
+      };
+      utter.onstart = () => {
+        import("./brainEvents").then((m) => m.setSpeakingActive(true)).catch(() => {});
+      };
+      utter.onend = finish;
+      utter.onerror = finish;
       speechSynthesis.resume();
       speechSynthesis.speak(utter);
       console.log("🐺 WOLF speaking:", clean.substring(0, 60));

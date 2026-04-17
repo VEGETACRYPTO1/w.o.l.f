@@ -6,6 +6,7 @@ import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { onBrainEvent, getSpeakingIntensity } from "@/lib/brainEvents";
 
 const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
   intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
@@ -43,32 +44,30 @@ function BloomEffect() {
   return null;
 }
 
-// ── Brain-shaped node distribution ──
+// ── Unified brain-shaped node distribution (single connected mass) ──
 function generateBrainNodes(count: number) {
   const nodes: THREE.Vector3[] = [];
   const a = 2.2, b = 1.6, c = 1.9;
-  const fissure = 0.18;
 
   while (nodes.length < count) {
     const u = Math.random() * Math.PI * 2;
     const v = Math.acos(2 * Math.random() - 1);
-    const r = 0.85 + Math.random() * 0.18;
+    const r = 0.7 + Math.random() * 0.32;
     let x = a * r * Math.sin(v) * Math.cos(u);
-    const y = b * r * Math.sin(v) * Math.sin(u);
-    const z = c * r * Math.cos(v);
+    let y = b * r * Math.sin(v) * Math.sin(u);
+    let z = c * r * Math.cos(v);
 
-    if (Math.abs(x) < fissure) continue;
-    x += Math.sign(x) * 0.05;
-
+    // Surface bumps to give brain-like gyri without splitting hemispheres
     const bump =
-      0.08 * Math.sin(4 * u + 3 * v) +
-      0.05 * Math.sin(7 * v - 2 * u);
-    const len = Math.sqrt(x * x + y * y + z * z);
-    nodes.push(new THREE.Vector3(
-      x + (x / len) * bump,
-      y + (y / len) * bump,
-      z + (z / len) * bump,
-    ));
+      0.09 * Math.sin(4 * u + 3 * v) +
+      0.06 * Math.sin(7 * v - 2 * u) +
+      0.04 * Math.sin(5 * u * v);
+    const len = Math.sqrt(x * x + y * y + z * z) || 1;
+    x += (x / len) * bump;
+    y += (y / len) * bump;
+    z += (z / len) * bump;
+
+    nodes.push(new THREE.Vector3(x, y, z));
   }
   return nodes;
 }
@@ -202,9 +201,34 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const hoverPoint = useRef<THREE.Vector3 | null>(null);
   const lastBurst = useRef(0);
 
+  // Chat wave: origin point + start time
+  const waveOrigin = useRef<THREE.Vector3 | null>(null);
+  const waveStart = useRef(0);
+
   const handleHover = useCallback((local: THREE.Vector3 | null) => {
     hoverPoint.current = local;
   }, []);
+
+  // Subscribe to brain wave events from chat
+  useEffect(() => {
+    const off = onBrainEvent("wave", () => {
+      const idx = Math.floor(Math.random() * nodes.length);
+      waveOrigin.current = nodes[idx].clone();
+      waveStart.current = performance.now() / 1000;
+      const adj = edgesByNode[idx];
+      const burst: Pulse[] = [];
+      for (let k = 0; k < Math.min(adj.length, 8); k++) {
+        burst.push({
+          id: pulseId++,
+          edgeIdx: adj[k],
+          progress: 0,
+          speed: 0.03 + Math.random() * 0.02,
+        });
+      }
+      setPulses((prev) => [...prev, ...burst]);
+    });
+    return () => { off(); };
+  }, [nodes, edgesByNode]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
@@ -244,12 +268,19 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     midColor.lerp(targetMid.current, 0.04);
     shadowColor.lerp(targetShadow.current, 0.04);
 
-    const breath = 1 + Math.sin(t * 0.7) * 0.04;
+    const audio = getSpeakingIntensity();
+    // Bigger breathing (15% amplitude) + audio-driven extra
+    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.08;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0012;
+      groupRef.current.rotation.y += 0.0012 + audio * 0.004;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
       groupRef.current.scale.setScalar(breath);
     }
+
+    // Wave propagation from chat events
+    const waveAge = waveOrigin.current ? t - waveStart.current : -1;
+    const waveRadius = waveAge >= 0 ? waveAge * 3.5 : -1;
+    const waveActive = waveAge >= 0 && waveAge < 1.6;
 
     // White flash on a random node every so often
     if (t > nextFlash.current) {
@@ -268,6 +299,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const phase = firingPhases[i];
         let fire = Math.pow(Math.max(0, Math.sin(t * 1.2 + phase)), 8);
 
+        // Audio-reactive boost
+        if (audio > 0) {
+          const audioFire = Math.pow(Math.max(0, Math.sin(t * 6 + phase * 2)), 4) * audio;
+          fire = Math.min(1, fire + audioFire * 0.7);
+        }
+
         // Hover proximity boost
         let proximity = 0;
         if (hover) {
@@ -278,16 +315,28 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           }
         }
 
-        const baseScale = 0.011;
-        let scale = baseScale + fire * 0.05 + proximity * 0.025;
+        // Wave ring boost
+        let waveBoost = 0;
+        if (waveActive && waveOrigin.current) {
+          const d = nodes[i].distanceTo(waveOrigin.current);
+          const ring = Math.abs(d - waveRadius);
+          if (ring < 0.35) {
+            waveBoost = (1 - ring / 0.35) * (1 - waveAge / 1.6);
+            fire = Math.min(1, fire + waveBoost);
+          }
+        }
 
-        // Color: idle = mid, firing = highlight, hover boost too
+        const baseScale = 0.011;
+        let scale = baseScale + fire * 0.05 + proximity * 0.025 + waveBoost * 0.04 + audio * 0.012;
+
+        // Color: idle = mid, firing = highlight
         tmpColor.copy(midColor).lerp(highlightColor, fire);
 
         if (i === flashing) {
           tmpColor.lerp(whiteColor, flashStrength);
           scale += flashStrength * 0.08;
         }
+        if (waveBoost > 0.3) tmpColor.lerp(whiteColor, waveBoost * 0.5);
 
         dummy.position.copy(nodes[i]);
         dummy.scale.setScalar(scale);
@@ -304,20 +353,20 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
     }
 
-    // Spawn pulses (denser ambient firing)
+    // Spawn pulses (denser ambient firing, more during speech)
     if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
       const newPulses: Pulse[] = [];
-      const spawnCount = 2 + Math.floor(Math.random() * 4);
+      const spawnCount = 2 + Math.floor(Math.random() * 4) + Math.floor(audio * 5);
       for (let k = 0; k < spawnCount; k++) {
         newPulses.push({
           id: pulseId++,
           edgeIdx: Math.floor(Math.random() * edges.length),
           progress: 0,
-          speed: 0.012 + Math.random() * 0.02,
+          speed: 0.012 + Math.random() * 0.02 + audio * 0.02,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
-      nextSpawn.current = t + 0.05 + Math.random() * 0.18;
+      nextSpawn.current = t + 0.05 + Math.random() * 0.18 - audio * 0.1;
     }
 
     // Hover burst — find nearest node, fire pulses along its edges
@@ -440,11 +489,38 @@ function BackgroundStars() {
   );
 }
 
+// ── Parallax camera drift based on mouse ──
+function ParallaxCamera() {
+  const { camera, gl } = useThree();
+  const target = useRef({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      target.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      target.current.y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [gl]);
+
+  useFrame(() => {
+    const desiredX = target.current.x * 0.6;
+    const desiredY = target.current.y * 0.4;
+    camera.position.x += (desiredX - camera.position.x) * 0.04;
+    camera.position.y += (desiredY - camera.position.y) * 0.04;
+    camera.lookAt(0, 0, 0);
+  });
+
+  return null;
+}
+
 function Scene({ colors }: { colors: ModeColorSet }) {
   return (
     <>
       <color attach="background" args={["#050507"]} />
       <BloomEffect />
+      <ParallaxCamera />
       <BrainNetwork colors={colors} />
       <BackgroundStars />
     </>
