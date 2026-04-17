@@ -375,24 +375,33 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     }
 
     if (lineMatRef.current) {
-      lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
-      lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
+      // Lines are the star — brighter, more present
+      lineMatRef.current.color.copy(midColor).lerp(highlightColor, 0.25);
+      lineMatRef.current.opacity = 0.42 + Math.sin(t * 0.9) * 0.06 + audio * 0.15;
     }
 
-    // Spawn pulses (denser ambient firing, more during speech)
+    // Spawn pulses from CORE outward (denser, more during speech)
     if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
       const newPulses: Pulse[] = [];
-      const spawnCount = 2 + Math.floor(Math.random() * 4) + Math.floor(audio * 5);
+      const spawnCount = 3 + Math.floor(Math.random() * 5) + Math.floor(audio * 6);
       for (let k = 0; k < spawnCount; k++) {
+        // Pick a random core node, then a random edge from it, traveling outward
+        const coreIdx = coreNodes[Math.floor(Math.random() * coreNodes.length)];
+        const adj = edgesByNode[coreIdx];
+        if (adj.length === 0) continue;
+        const e = adj[Math.floor(Math.random() * adj.length)];
+        // Reverse if edges[e][0] is not the core node (we want to start at coreIdx)
+        const reverse = edges[e][0] !== coreIdx;
         newPulses.push({
           id: pulseId++,
-          edgeIdx: Math.floor(Math.random() * edges.length),
+          edgeIdx: e,
           progress: 0,
           speed: 0.012 + Math.random() * 0.02 + audio * 0.02,
+          reverse,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
-      nextSpawn.current = t + 0.05 + Math.random() * 0.18 - audio * 0.1;
+      nextSpawn.current = t + 0.04 + Math.random() * 0.14 - audio * 0.08;
     }
 
     // Hover burst — find nearest node, fire pulses along its edges
