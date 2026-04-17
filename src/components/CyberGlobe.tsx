@@ -190,8 +190,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const firingPhases = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
 
-    return { nodes, edges, edgePositions, firingPhases, edgesByNode };
+    const edgeColors = new Float32Array(edges.length * 2 * 3);
+    return { nodes, edges, edgePositions, edgeColors, firingPhases, edgesByNode };
   }, []);
+
+  // Per-edge trail glow intensity (0..1), decays over time
+  const edgeGlow = useMemo(() => new Float32Array(edges.length), [edges.length]);
 
   const [pulses, setPulses] = useState<Pulse[]>([]);
   const nextSpawn = useRef(0);
