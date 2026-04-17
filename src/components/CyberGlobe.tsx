@@ -467,7 +467,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         <sphereGeometry args={[1, 8, 8]} />
         <meshBasicMaterial
           transparent
-          opacity={0.95}
+          opacity={0.4}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           toneMapped={false}
@@ -475,7 +475,8 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       </instancedMesh>
 
       {pulses.map((p) => {
-        const [i, j] = edges[p.edgeIdx];
+        const [i0, j0] = edges[p.edgeIdx];
+        const [i, j] = p.reverse ? [j0, i0] : [i0, j0];
         const a = nodes[i];
         const b = nodes[j];
         const x = a.x + (b.x - a.x) * p.progress;
@@ -484,7 +485,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const intensity = Math.sin(p.progress * Math.PI);
         return (
           <mesh key={p.id} position={[x, y, z]}>
-            <sphereGeometry args={[0.028, 8, 8]} />
+            <sphereGeometry args={[0.022, 8, 8]} />
             <meshBasicMaterial
               color={colors.highlight}
               transparent
