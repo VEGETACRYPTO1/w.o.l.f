@@ -123,7 +123,7 @@ export function ChatOverlay() {
 
   return (
     <>
-      <div className="fixed bottom-6 right-6 z-50">
+      <div data-bh className="fixed bottom-6 right-6 z-50">
         <div
           style={{
             position: "absolute",
@@ -152,6 +152,7 @@ export function ChatOverlay() {
       </div>
 
       <div
+        data-bh
         className="fixed z-50"
         style={{
           bottom: "100px",

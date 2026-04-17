@@ -33,21 +33,21 @@ export function WakeProvider({ children }: { children: React.ReactNode }) {
 
   const wake = useCallback(() => {
     setPhaseState((cur) => (cur === "sleeping" ? "waking" : cur));
-    // After burst animation, finalize awake
+    // Charge (~0.45s) + explosion + fade — total ~1.6s
     window.setTimeout(() => {
       setPhaseState((cur) => (cur === "waking" ? "awake" : cur));
-    }, 900);
+    }, 1600);
   }, []);
 
   const sleep = useCallback(() => {
     setPhaseState((cur) => (cur === "awake" ? "sleeping-out" : cur));
-    // Stop hands-free mic
     import("@/lib/wolfVoice").then((m) => {
       try { m.stopHandsFree(); } catch {}
     }).catch(() => {});
+    // Black-hole suction is 1.4s; let orb settle
     window.setTimeout(() => {
       setPhaseState((cur) => (cur === "sleeping-out" ? "sleeping" : cur));
-    }, 1100);
+    }, 1500);
   }, []);
 
   return (

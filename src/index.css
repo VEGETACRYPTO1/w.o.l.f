@@ -192,4 +192,30 @@
   .mode-transition {
     transition: background-color 0.5s ease, border-color 0.5s ease, color 0.3s ease, box-shadow 0.5s ease;
   }
+
+  /* ── Black hole suction: pulls UI elements toward center, spins, shrinks, fades ── */
+  @keyframes blackHoleSuck {
+    0% {
+      transform: translate(0, 0) scale(1) rotate(0deg);
+      opacity: 1;
+      filter: blur(0px);
+    }
+    40% {
+      opacity: 1;
+      filter: blur(0.5px) brightness(1.4);
+    }
+    100% {
+      transform: var(--bh-translate, translate(0, 0)) scale(0.02) rotate(720deg);
+      opacity: 0;
+      filter: blur(4px) brightness(2);
+    }
+  }
+
+  /* Any element marked with data-bh inside an active black-hole wrapper gets sucked.
+     Per-element --bh-translate is computed in JS based on element center vs viewport center. */
+  .black-hole-active [data-bh] {
+    animation: blackHoleSuck 1.4s cubic-bezier(0.55, 0, 0.85, 0.15) forwards;
+    transform-origin: 50% 50%;
+    will-change: transform, opacity, filter;
+  }
 }
