@@ -322,6 +322,19 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
+    // Forming animation (mount → 1.0s ease-in)
+    const sinceMount = (performance.now() / 1000) - mountTimeRef.current;
+    const formProgress = Math.min(1, sinceMount / 1.0);
+    const formEase = 1 - Math.pow(1 - formProgress, 3);
+
+    // Dissolving (black hole) animation
+    if (dissolving && dissolveStartRef.current === null) {
+      dissolveStartRef.current = performance.now() / 1000;
+    }
+    const dissolveAge = dissolveStartRef.current !== null ? (performance.now() / 1000) - dissolveStartRef.current : -1;
+    const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 1.0) : 0;
+    const dissolveEase = dissolveProgress * dissolveProgress;
+
     highlightColor.lerp(targetHighlight.current, 0.04);
     midColor.lerp(targetMid.current, 0.04);
     shadowColor.lerp(targetShadow.current, 0.04);
@@ -330,9 +343,11 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     // Smooth single-flow breathing — bigger amplitude
     const breath = 1 + Math.sin(t * 0.7) * 0.22 + audio * 0.08;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0012 + audio * 0.004;
+      groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.05;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
-      groupRef.current.scale.setScalar(breath);
+      const formScale = formEase;
+      const dissolveScale = 1 - dissolveEase;
+      groupRef.current.scale.setScalar(breath * formScale * dissolveScale);
     }
 
     // Wave propagation from chat events
