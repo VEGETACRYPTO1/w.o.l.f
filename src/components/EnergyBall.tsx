@@ -265,10 +265,18 @@ export function EnergyBall({ phase }: { phase: WakePhase }) {
   const showCanvas = phase === "sleeping" || phase === "waking" || phase === "sleeping-out";
   if (!showCanvas) return null;
 
+  // Only the stable sleeping screen is opaque black.
+  // During waking & sleeping-out the brain/UI must remain visible behind the orb.
+  const isStableSleep = phase === "sleeping";
+
   return (
     <div
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: 60, background: "#000" }}
+      style={{
+        zIndex: 60,
+        background: isStableSleep ? "#000" : "transparent",
+        transition: "background 0.6s ease",
+      }}
     >
       <Canvas
         camera={{ position: [0, 0, 3], fov: 50 }}
@@ -276,7 +284,7 @@ export function EnergyBall({ phase }: { phase: WakePhase }) {
         style={{ background: "transparent" }}
       >
         <Bloom />
-        <Starfield />
+        {isStableSleep && <Starfield />}
         <Orb phase={phase} />
       </Canvas>
     </div>
