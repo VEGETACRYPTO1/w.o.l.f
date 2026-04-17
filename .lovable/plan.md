@@ -1,14 +1,23 @@
 
-**Problem:** The shockwave doesn't fire because most mode changes come through the **voice path**, not `setMode`. Console logs confirm: `MODE: war`, `MODE: relax`, `MODE: intelligence` are all triggered by voice (`onModeChange` from `wolfVoice`), which directly calls `setModeState` in `ModeContext.tsx` (lines 89-97) and **bypasses `emitModeBurst` entirely**.
 
-Additionally, `setMode` uses functional `setModeState((prev) => ...)` to compare — under React StrictMode this updater runs twice, which can fire the burst twice or behave unpredictably.
+**Root cause of "doesn't work":** The component crashes with `TypeError: undefined is not an object (evaluating 'edges[p.edgeIdx]')` at line 591 in `CyberGlobe.tsx`. When this throws, the whole brain unmounts → no shockwave can ever render. So even though the burst event fires correctly (we can see `MODE: war/relax/intelligence` in logs), the visual never appears because the canvas has crashed.
 
-**Fix (1 file: `src/contexts/ModeContext.tsx`):**
+The crash happens because `pulses` React state can contain stale `edgeIdx` values after HMR / re-mounts, or `edgesByNode[p.toNode]` returns `undefined` if `toNode` is out of range.
 
-1. Refactor `setMode` to compare against current `mode` state (not inside setter) before emitting burst, so the burst fires exactly once per real change.
-2. In the `onModeChange` voice bridge, emit `emitModeBurst(MODE_BURST_COLORS[voiceMode])` whenever the voice flips the mode to a different value, mirroring the manual path.
-3. Use a ref to track the previous mode inside the voice bridge so we only emit on actual changes (avoid emitting if voice re-asserts the same mode).
+**Fix (1 file: `src/components/CyberGlobe.tsx`):**
 
-**Result:** Whether mode is changed via UI button or by saying "war / relax / intelligence" out loud, the colored radial shockwave fires once from center.
+1. **Guard the render map (line 590-612):** filter out invalid pulses before mapping — skip any `p` where `edges[p.edgeIdx]` is undefined or `nodes[p.toNode]` is undefined.
 
-**No changes needed** to `CyberGlobe.tsx` or `brainEvents.ts` — the subscription and rendering are already wired correctly.
+2. **Guard the chaining loop (line 510-545):** before reading `edgesByNode[p.toNode]`, check it exists; before reading `edges[p.edgeIdx]` for `edgeGlow`, bounds-check `p.edgeIdx < edges.length`.
+
+3. **Guard the burst spawn loop (line 263-280):** ensure `edges[edgeIdx]` exists before destructuring.
+
+4. **Sanity log** when shockwave fires so we can confirm it visually in console: `console.log("💥 BURST", color)`.
+
+This will stop the crash, keep the canvas alive, and let the already-correct shockwave rendering actually show on screen.
+
+**Files to edit:**
+- `src/components/CyberGlobe.tsx` — add defensive guards in 3 spots + 1 debug log.
+
+**Result:** Mode change (UI or voice) → no crash → colored radial shockwave fires from center as designed.
+
