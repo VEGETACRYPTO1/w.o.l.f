@@ -1,16 +1,10 @@
 import { CyberGlobe } from "@/components/CyberGlobe";
 import { ChatOverlay } from "@/components/ChatOverlay";
-import { SleepOrb } from "@/components/SleepOrb";
 import { useLocation } from "react-router-dom";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isDashboard = location.pathname === "/";
-  const asleep = true;
-
-  if (asleep) {
-    return <SleepOrb />;
-  }
 
   return (
     <div className="min-h-screen flex w-full relative">
