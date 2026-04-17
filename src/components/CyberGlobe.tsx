@@ -6,6 +6,7 @@ import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { onBrainEvent, getSpeakingIntensity } from "@/lib/brainEvents";
 
 const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
   intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
@@ -43,32 +44,30 @@ function BloomEffect() {
   return null;
 }
 
-// ── Brain-shaped node distribution ──
+// ── Unified brain-shaped node distribution (single connected mass) ──
 function generateBrainNodes(count: number) {
   const nodes: THREE.Vector3[] = [];
   const a = 2.2, b = 1.6, c = 1.9;
-  const fissure = 0.18;
 
   while (nodes.length < count) {
     const u = Math.random() * Math.PI * 2;
     const v = Math.acos(2 * Math.random() - 1);
-    const r = 0.85 + Math.random() * 0.18;
+    const r = 0.7 + Math.random() * 0.32;
     let x = a * r * Math.sin(v) * Math.cos(u);
-    const y = b * r * Math.sin(v) * Math.sin(u);
-    const z = c * r * Math.cos(v);
+    let y = b * r * Math.sin(v) * Math.sin(u);
+    let z = c * r * Math.cos(v);
 
-    if (Math.abs(x) < fissure) continue;
-    x += Math.sign(x) * 0.05;
-
+    // Surface bumps to give brain-like gyri without splitting hemispheres
     const bump =
-      0.08 * Math.sin(4 * u + 3 * v) +
-      0.05 * Math.sin(7 * v - 2 * u);
-    const len = Math.sqrt(x * x + y * y + z * z);
-    nodes.push(new THREE.Vector3(
-      x + (x / len) * bump,
-      y + (y / len) * bump,
-      z + (z / len) * bump,
-    ));
+      0.09 * Math.sin(4 * u + 3 * v) +
+      0.06 * Math.sin(7 * v - 2 * u) +
+      0.04 * Math.sin(5 * u * v);
+    const len = Math.sqrt(x * x + y * y + z * z) || 1;
+    x += (x / len) * bump;
+    y += (y / len) * bump;
+    z += (z / len) * bump;
+
+    nodes.push(new THREE.Vector3(x, y, z));
   }
   return nodes;
 }
