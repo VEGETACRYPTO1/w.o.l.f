@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { onModeChange, setVoiceMode, type VoiceMode } from "@/lib/wolfVoice";
+import { emitModeBurst } from "@/lib/brainEvents";
+
+const MODE_BURST_COLORS: Record<string, string> = {
+  intelligence: "#FFD36B",
+  war: "#ef4444",
+  relax: "#00ffcc",
+  rebuild: "#4090e0",
+  expansion: "#40b870",
+};
 
 export type Mode = "intelligence" | "war" | "rebuild" | "expansion" | "relax";
 
@@ -61,7 +70,12 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setMode = useCallback((newMode: Mode) => {
-    setModeState(newMode);
+    setModeState((prev) => {
+      if (prev !== newMode) {
+        emitModeBurst(MODE_BURST_COLORS[newMode] || "#FFD36B");
+      }
+      return newMode;
+    });
     localStorage.setItem("jarvis-mode", newMode);
     document.documentElement.setAttribute("data-mode", newMode);
     // Sync voice system (CSS vars, body classes, globe)
