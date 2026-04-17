@@ -928,19 +928,19 @@ function ParallaxCamera() {
   return null;
 }
 
-function Scene({ colors }: { colors: ModeColorSet }) {
+function Scene({ colors, dissolving }: { colors: ModeColorSet; dissolving?: boolean }) {
   return (
     <>
       <color attach="background" args={["#050507"]} />
       <BloomEffect />
       <ParallaxCamera />
-      <BrainNetwork colors={colors} />
+      <BrainNetwork colors={colors} dissolving={dissolving} />
       <BackgroundStars />
     </>
   );
 }
 
-export function CyberGlobe() {
+export function CyberGlobe({ dissolving = false }: { dissolving?: boolean }) {
   const { mode } = useMode();
   const colors = modeColors[mode] || modeColors.intelligence;
 
@@ -951,7 +951,7 @@ export function CyberGlobe() {
         gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
         style={{ background: "#050507" }}
       >
-        <Scene colors={colors} />
+        <Scene colors={colors} dissolving={dissolving} />
       </Canvas>
     </div>
   );
