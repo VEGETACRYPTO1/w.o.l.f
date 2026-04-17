@@ -335,6 +335,31 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const waveRadius = waveAge >= 0 ? waveAge * 3.5 : -1;
     const waveActive = waveAge >= 0 && waveAge < 1.6;
 
+    // Mode burst: radial shockwave from center
+    const burstAge = burstActive.current ? t - burstStart.current : -1;
+    const burstProgress = burstAge >= 0 ? burstAge / BURST_DURATION : -1;
+    const burstOn = burstActive.current && burstProgress >= 0 && burstProgress < 1;
+    const burstRadius = burstOn ? burstProgress * BURST_MAX_RADIUS : -1;
+    if (burstActive.current && burstProgress >= 1) burstActive.current = false;
+
+    // Bump edges within wavefront band
+    if (burstOn) {
+      const fade = 1 - burstProgress;
+      for (let e = 0; e < edges.length; e++) {
+        const [i, j] = edges[e];
+        const mx = (nodes[i].x + nodes[j].x) * 0.5;
+        const my = (nodes[i].y + nodes[j].y) * 0.5;
+        const mz = (nodes[i].z + nodes[j].z) * 0.5;
+        const d = Math.sqrt(mx * mx + my * my + mz * mz);
+        const ring = Math.abs(d - burstRadius);
+        if (ring < BURST_BAND) {
+          const k = (1 - ring / BURST_BAND) * fade;
+          if (edgeGlow[e] < k) edgeGlow[e] = k;
+        }
+      }
+    }
+
+
     // White flash on a random node every so often
     if (t > nextFlash.current) {
       flashIndex.current = Math.floor(Math.random() * nodes.length);
@@ -408,9 +433,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
     const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
     const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
-    const hiR = highlightColor.r;
-    const hiG = highlightColor.g;
-    const hiB = highlightColor.b;
+    // Highlight color tint: blend toward burst color while burst is active
+    const tintAmt = burstOn ? Math.sin(burstProgress * Math.PI) : 0;
+    const hiR = highlightColor.r + (burstColor.current.r - highlightColor.r) * tintAmt;
+    const hiG = highlightColor.g + (burstColor.current.g - highlightColor.g) * tintAmt;
+    const hiB = highlightColor.b + (burstColor.current.b - highlightColor.b) * tintAmt;
     if (lineGeomRef.current) {
       const colorAttr = lineGeomRef.current.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (colorAttr) {
