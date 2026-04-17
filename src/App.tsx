@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ModeProvider } from "@/contexts/ModeContext";
+import { WakeProvider } from "@/contexts/WakeContext";
 import { AppLayout } from "@/components/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Goals from "./pages/Goals";
@@ -19,6 +20,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <ModeProvider>
+        <WakeProvider>
         <BrowserRouter>
           <AppLayout>
             <Routes>
@@ -30,6 +32,7 @@ const App = () => (
             </Routes>
           </AppLayout>
         </BrowserRouter>
+        </WakeProvider>
       </ModeProvider>
     </TooltipProvider>
   </QueryClientProvider>

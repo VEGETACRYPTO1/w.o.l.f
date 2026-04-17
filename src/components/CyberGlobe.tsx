@@ -627,8 +627,9 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
 // ── Background Stars (deep-space drift + constellations + warp streaks) ──
 function BackgroundStars() {
-  const COUNT = 300;
+  const COUNT = 90;
   const BOUNDS = { x: 8, y: 6, z: 5 }; // half-extents; total 16x12x10
+  const CONSTELLATION_CHANCE = 0.15; // only ~15% of stars get a line
 
   const groupRef = useRef<THREE.Group>(null);
   const starsRef = useRef<THREE.Points>(null);
@@ -657,10 +658,11 @@ function BackgroundStars() {
       velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.04;
     }
 
-    // Build constellation pairs: for each star, connect to 1 nearest neighbor within threshold
-    const THRESH = 1.6;
+    // Build constellation pairs: rare, only some stars get a line, tight threshold
+    const THRESH = 1.0;
     const pairs: Array<[number, number]> = [];
     for (let i = 0; i < COUNT; i++) {
+      if (Math.random() > CONSTELLATION_CHANCE) continue;
       let bestJ = -1;
       let bestD = THRESH * THRESH;
       const ax = positions[i * 3], ay = positions[i * 3 + 1], az = positions[i * 3 + 2];
@@ -874,7 +876,7 @@ function BackgroundStars() {
         <lineBasicMaterial
           transparent
           color="#ffffff"
-          opacity={0.05}
+          opacity={0.025}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
         />
