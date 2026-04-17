@@ -1,300 +1,101 @@
-// ==========================
-// 🐺 W.O.L.F CORE FIXED SYSTEM
-// ==========================
+import { useEffect, useRef } from "react";
+import { useWake } from "@/contexts/WakeContext";
+import { triggerWake, triggerSleep, processVoiceCommand } from "@/lib/wolfVoice";
 
-export type VoiceMode = "intelligence" | "war" | "relax";
+export function SleepWakeListener() {
+  const { phase, wake, sleep } = useWake();
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
-// Global mode change listener (React bridge)
-let onModeChangeCallback: ((mode: VoiceMode) => void) | null = null;
-export function onModeChange(cb: (mode: VoiceMode) => void) { onModeChangeCallback = cb; }
+  useEffect(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+    let rec: any = null;
+    let stopped = false;
 
-let voices: SpeechSynthesisVoice[] = [];
-let audioReady = false;
-let isAwake = false;
-let currentMode: VoiceMode = "intelligence";
-let recognition: any = null;
-let _isListening = false;
-let wakeWordCallback: (() => void) | null = null;
-let commandCallback: ((text: string) => void) | null = null;
+    const start = () => {
+      if (rec) return;
+      try {
+        rec = new SR();
+        rec.continuous = true;
+        rec.interimResults = false;
+        rec.lang = "en-US";
 
-// ==========================
-// 🔊 LOAD VOICES
-// ==========================
+        rec.onresult = (e: any) => {
+          const text = e.results[e.results.length - 1][0].transcript.toLowerCase().trim();
+          console.log("🎤 Heard:", text);
+          const p = phaseRef.current;
 
-function loadVoices() {
-  voices = speechSynthesis.getVoices();
-  if (voices.length > 0) console.log("🔊 Voices loaded:", voices.length);
-}
+          // Always check wake word when not fully awake
+          if (p === "sleeping" || p === "waking") {
+            if (
+              text.includes("wake up") ||
+              text.includes("hey wolf") ||
+              text.includes("hello wolf") ||
+              text === "wolf" ||
+              text.includes(" wolf")
+            ) {
+              triggerWake();
+              wake();
+            }
+            return;
+          }
 
-if (typeof window !== "undefined" && window.speechSynthesis) {
-  speechSynthesis.onvoiceschanged = loadVoices;
-  loadVoices();
-}
+          // When awake — route everything through processVoiceCommand
+          if (p === "awake") {
+            const result = processVoiceCommand(text);
+            if (result === "sleep") {
+              triggerSleep();
+              sleep();
+            }
+          }
+        };
 
-// ==========================
-// 🔓 UNLOCK AUDIO
-// ==========================
+        rec.onend = () => {
+          if (!stopped) {
+            setTimeout(() => {
+              try {
+                rec = null;
+                start();
+              } catch {}
+            }, 300);
+          }
+        };
+        rec.onerror = (err: any) => {
+          console.log("🎤 Recognition error:", err.error);
+          if (!stopped) {
+            setTimeout(() => {
+              try {
+                rec = null;
+                start();
+              } catch {}
+            }, 600);
+          }
+        };
 
-function unlockAudio() {
-  if (audioReady) return;
-  try {
-    const u = new SpeechSynthesisUtterance(" ");
-    speechSynthesis.speak(u);
-    speechSynthesis.cancel();
-    speechSynthesis.resume();
-    audioReady = true;
-    console.log("🔓 Audio unlocked");
-  } catch (e) {}
-}
-
-if (typeof window !== "undefined") {
-  document.body?.addEventListener("click", () => {
-    unlockAudio();
-  }, { once: true });
-}
-
-// External wake trigger (called by SleepWakeListener)
-export function triggerWake() {
-  if (isAwake) return;
-  isAwake = true;
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  wolfSpeak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
-}
-
-export function triggerSleep() {
-  isAwake = false;
-}
-
-// Process a transcript when awake: mode switches, sleep command, then chat
-export function processVoiceCommand(text: string): "mode" | "sleep" | "command" | "none" {
-  const t = text.toLowerCase().trim();
-  if (!t) return "none";
-  if (t.includes("war mode")) { setMode("war"); wolfSpeak("war mode activated").catch(()=>{}); return "mode"; }
-  if (t.includes("relax mode")) { setMode("relax"); wolfSpeak("relax mode activated").catch(()=>{}); return "mode"; }
-  if (t.includes("intelligence mode")) { setMode("intelligence"); wolfSpeak("intelligence mode activated").catch(()=>{}); return "mode"; }
-  if (t.includes("go to sleep")) return "sleep";
-  if (commandCallback) { commandCallback(text); return "command"; }
-  return "none";
-}
-
-// ==========================
-// 🎯 MODE SWITCH (MASTER FIX)
-// ==========================
-
-function setMode(mode: VoiceMode) {
-  currentMode = mode;
-
-  // 🔥 FORCE UI RESET
-  document.body.classList.remove("mode-war", "mode-relax", "mode-intelligence");
-  document.body.classList.add(`mode-${mode}`);
-  document.documentElement.setAttribute("data-mode", mode);
-
-  // 🔥 FORCE GLOBE COLOR via CSS variable
-  const colorMap: Record<VoiceMode, string> = {
-    war: "#ff3b3b",
-    relax: "#00ffc6",
-    intelligence: "#ffd700",
-  };
-  const color = colorMap[mode];
-  document.documentElement.style.setProperty("--wolf-glow", color);
-
-  // 🔥 HARD FORCE CANVAS (if scene exists on window)
-  const w = window as any;
-  if (w.scene) {
-    w.scene.traverse((obj: any) => {
-      if (obj.material && obj.material.color) {
-        obj.material.color.set(color);
+        rec.start();
+        console.log("🎤 SleepWakeListener active");
+      } catch (err) {
+        console.log("🎤 Failed to start:", err);
       }
-    });
-  }
+    };
 
-  // 🔥 Notify React context
-  onModeChangeCallback?.(mode);
+    // Start immediately + retry on first click for browsers needing gesture
+    start();
+    const onClick = () => {
+      if (!rec) start();
+    };
+    document.addEventListener("click", onClick, { once: true });
 
-  console.log("MODE:", mode);
-}
+    return () => {
+      stopped = true;
+      document.removeEventListener("click", onClick);
+      try {
+        rec?.stop();
+      } catch {}
+      rec = null;
+    };
+  }, [wake, sleep]);
 
-// ==========================
-// 🔊 SPEAK
-// ==========================
-
-function wolfSpeak(text: string): Promise<void> {
-   const clean = text
-     .replace(/\./g, "... ")
-     .replace(/,/g, ", ")
-     .replace(/!/g, "! ")
-     .replace(/\?/g, "? ")
-     .replace(/:/g, "... ")
-     .replace(/\n/g, "... ")
-  .trim();
-
-  if (!clean) return Promise.resolve();
-
-  if (voices.length === 0) {
-    loadVoices();
-    return new Promise((resolve) => {
-      wolfSpeak(clean).then(resolve);
-    });
-  }
-
-  try {
-    speechSynthesis.cancel();
-    speechSynthesis.pause();
-    return new Promise<void>((resolve) => {
-      const utter = new SpeechSynthesisUtterance(clean);
-      utter.rate = 1.12;
-      utter.pitch = 0.95;
-      utter.volume = 1;
-      const finish = () => {
-        import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
-        resolve();
-      };
-      utter.onstart = () => {
-        import("./brainEvents").then((m) => m.setSpeakingActive(true)).catch(() => {});
-      };
-      utter.onend = finish;
-      utter.onerror = finish;
-      speechSynthesis.resume();
-      speechSynthesis.speak(utter);
-      console.log("🐺 WOLF speaking:", clean.substring(0, 60));
-    });
-  } catch (err) {
-    console.log("❌ voice error:", err);
-    return Promise.resolve();
-  }
-}
-
-if (typeof window !== "undefined") {
-  (window as any).wolfSpeak = wolfSpeak;
-}
-
-// ==========================
-// 🐺 WAKE SYSTEM (FIXED)
-// ==========================
-
-function handleWake(text: string): boolean {
-  const t = text.toLowerCase();
-  if (!t.includes("hey wolf") && !t.includes("wake up") && !t.includes("hello wolf")) return false;
-
-  isAwake = true;
-  wakeWordCallback?.();
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  wolfSpeak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
-  return true;
-}
-
-// ==========================
-// 🎤 VOICE MODE SWITCH
-// ==========================
-
-function handleModeSwitch(text: string): boolean {
-  const t = text.toLowerCase();
-  if (t.includes("war mode")) {
-    setMode("war");
-  } else if (t.includes("relax mode")) {
-    setMode("relax");
-  } else if (t.includes("intelligence mode")) {
-    setMode("intelligence");
-  } else {
-    return false;
-  }
-  wolfSpeak(`${currentMode} mode activated`).catch(() => {});
-  return true;
-}
-
-// ==========================
-// 🎤 LISTEN (CONTINUOUS FIX)
-// ==========================
-
-export function isRecognitionSupported(): boolean {
-  return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-}
-
-function _autoStartListening() {
-  if (!isRecognitionSupported()) return;
-  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-  recognition = new SR();
-  recognition.continuous = true;
-  recognition.interimResults = false;
-  recognition.lang = "en-US";
-
-  recognition.onresult = (event: any) => {
-    const text = event.results[event.results.length - 1][0].transcript.trim();
-    console.log("🎤 Heard:", text);
-
-    // Wake once
-    if (!isAwake) {
-      handleWake(text);
-      return;
-    }
-
-    // Mode switch
-    if (handleModeSwitch(text)) return;
-
-    // Normal flow
-    if (commandCallback) commandCallback(text);
-  };
-
-  recognition.onend = () => {
-    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 300);
-  };
-  recognition.onerror = () => {
-    setTimeout(() => { try { recognition?.start(); } catch (e) {} }, 800);
-  };
-
-  recognition.start();
-  _isListening = true;
-  console.log("🎤 Listening...");
-}
-
-// ==========================
-// 🔊 PUBLIC API
-// ==========================
-
-export const speak = wolfSpeak;
-export function getIsSpeaking() { return false; }
-export function stopSpeaking() { speechSynthesis.cancel(); }
-export function getCurrentVoiceMode(): VoiceMode { return currentMode; }
-export function setVoiceMode(mode: VoiceMode) { setMode(mode); wolfSpeak(`${mode} mode activated`); }
-export function testVoice() { wolfSpeak("W.O.L.F fully operational, SK."); }
-export function isWolfActive() { return isAwake; }
-export function isListening(): boolean { return _isListening; }
-
-export function startHandsFree(onWake: () => void, onCommand: (text: string) => void): boolean {
-  if (!isRecognitionSupported()) return false;
-  wakeWordCallback = onWake;
-  commandCallback = onCommand;
-  return true;
-}
-
-export function stopHandsFree() {
-  isAwake = false;
-  wakeWordCallback = null;
-  commandCallback = null;
-  if (recognition) { try { recognition.stop(); } catch {} recognition = null; _isListening = false; }
-}
-
-export function stopListening() { stopHandsFree(); }
-export function startListening(onResult: (text: string) => void): boolean { commandCallback = onResult; return true; }
-
-// ==========================
-// 🔊 REPLAY LAST
-// ==========================
-
-export function replayLast() {
-  const msgs = document.querySelectorAll(".ai-message");
-  const last = msgs[msgs.length - 1];
-  if (last) wolfSpeak(last.textContent || "");
-}
-
-// ==========================
-// 🚀 INIT
-// ==========================
-
-if (typeof window !== "undefined") {
-  window.addEventListener("load", () => {
-    setMode("intelligence"); // default gold
-  });
+  return null;
 }
