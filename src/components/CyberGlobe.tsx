@@ -437,16 +437,43 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       }
     }
 
-    setPulses((prev) =>
-      prev
-        .map((p) => {
-          const next = p.progress + p.speed;
-          // Bump glow on the edge as the pulse traverses it
-          edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
-          return { ...p, progress: next };
-        })
-        .filter((p) => p.progress <= 1)
-    );
+    setPulses((prev) => {
+      const survivors: Pulse[] = [];
+      const children: Pulse[] = [];
+      const MAX_GENERATION = 4;
+      for (const p of prev) {
+        const next = p.progress + p.speed;
+        edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+        if (next <= 1) {
+          survivors.push({ ...p, progress: next });
+        } else if (
+          p.generation < MAX_GENERATION &&
+          survivors.length + children.length < MAX_PULSES &&
+          Math.random() < 0.65
+        ) {
+          // Chain: spawn 1-2 child pulses on edges connected to the destination node
+          const adj = edgesByNode[p.toNode];
+          // Avoid going back along the same edge
+          const candidates = adj.filter((e) => e !== p.edgeIdx);
+          if (candidates.length > 0) {
+            const childCount = 1 + (Math.random() < 0.4 ? 1 : 0);
+            for (let k = 0; k < childCount && k < candidates.length; k++) {
+              const pick = candidates[Math.floor(Math.random() * candidates.length)];
+              const [ei, ej] = edges[pick];
+              children.push({
+                id: pulseId++,
+                edgeIdx: pick,
+                progress: 0,
+                speed: p.speed * (0.85 + Math.random() * 0.3),
+                toNode: ei === p.toNode ? ej : ei,
+                generation: p.generation + 1,
+              });
+            }
+          }
+        }
+      }
+      return [...survivors, ...children];
+    });
   });
 
   return (
@@ -493,8 +520,9 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
       {pulses.map((p) => {
         const [i, j] = edges[p.edgeIdx];
-        const a = nodes[i];
-        const b = nodes[j];
+        const fromIdx = p.toNode === j ? i : j;
+        const a = nodes[fromIdx];
+        const b = nodes[p.toNode];
         const x = a.x + (b.x - a.x) * p.progress;
         const y = a.y + (b.y - a.y) * p.progress;
         const z = a.z + (b.z - a.z) * p.progress;
