@@ -127,6 +127,7 @@ interface Pulse {
   edgeIdx: number;
   progress: number;
   speed: number;
+  reverse: boolean; // if true, travels from edges[e][1] -> edges[e][0]
 }
 
 let pulseId = 0;
