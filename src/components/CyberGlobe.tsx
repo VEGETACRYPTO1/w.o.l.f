@@ -225,11 +225,15 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const adj = edgesByNode[idx];
       const burst: Pulse[] = [];
       for (let k = 0; k < Math.min(adj.length, 8); k++) {
+        const edgeIdx = adj[k];
+        const [ei, ej] = edges[edgeIdx];
         burst.push({
           id: pulseId++,
-          edgeIdx: adj[k],
+          edgeIdx,
           progress: 0,
           speed: 0.03 + Math.random() * 0.02,
+          toNode: ei === idx ? ej : ei,
+          generation: 0,
         });
       }
       setPulses((prev) => [...prev, ...burst]);
@@ -389,11 +393,15 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       const newPulses: Pulse[] = [];
       const spawnCount = 2 + Math.floor(Math.random() * 4) + Math.floor(audio * 5);
       for (let k = 0; k < spawnCount; k++) {
+        const edgeIdx = Math.floor(Math.random() * edges.length);
+        const [ei, ej] = edges[edgeIdx];
         newPulses.push({
           id: pulseId++,
-          edgeIdx: Math.floor(Math.random() * edges.length),
+          edgeIdx,
           progress: 0,
           speed: 0.012 + Math.random() * 0.02 + audio * 0.02,
+          toNode: Math.random() < 0.5 ? ei : ej,
+          generation: 0,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
@@ -413,11 +421,15 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const burst: Pulse[] = [];
         const burstSize = Math.min(adj.length, 6);
         for (let k = 0; k < burstSize; k++) {
+          const edgeIdx = adj[k];
+          const [ei, ej] = edges[edgeIdx];
           burst.push({
             id: pulseId++,
-            edgeIdx: adj[k],
+            edgeIdx,
             progress: 0,
             speed: 0.025 + Math.random() * 0.02,
+            toNode: ei === nearestIdx ? ej : ei,
+            generation: 0,
           });
         }
         setPulses((prev) => [...prev, ...burst]);
