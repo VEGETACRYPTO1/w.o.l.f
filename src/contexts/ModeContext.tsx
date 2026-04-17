@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { onModeChange, setVoiceMode, type VoiceMode } from "@/lib/wolfVoice";
 import { emitModeBurst } from "@/lib/brainEvents";
 
@@ -62,6 +62,7 @@ const ModeContext = createContext<ModeContextType | undefined>(undefined);
 
 export function ModeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<Mode>("intelligence");
+  const lastModeRef = useRef<Mode>("intelligence");
 
   // On mount: default to intelligence
   useEffect(() => {
@@ -70,12 +71,11 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setMode = useCallback((newMode: Mode) => {
-    setModeState((prev) => {
-      if (prev !== newMode) {
-        emitModeBurst(MODE_BURST_COLORS[newMode] || "#FFD36B");
-      }
-      return newMode;
-    });
+    if (lastModeRef.current !== newMode) {
+      lastModeRef.current = newMode;
+      emitModeBurst(MODE_BURST_COLORS[newMode] || "#FFD36B");
+    }
+    setModeState(newMode);
     localStorage.setItem("jarvis-mode", newMode);
     document.documentElement.setAttribute("data-mode", newMode);
     // Sync voice system (CSS vars, body classes, globe)
@@ -89,7 +89,10 @@ export function ModeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     onModeChange((voiceMode) => {
       if (voiceMode === "intelligence" || voiceMode === "war" || voiceMode === "relax") {
-        // Only update React state, don't call setMode to avoid loop
+        if (lastModeRef.current !== voiceMode) {
+          lastModeRef.current = voiceMode as Mode;
+          emitModeBurst(MODE_BURST_COLORS[voiceMode] || "#FFD36B");
+        }
         setModeState(voiceMode);
         document.documentElement.setAttribute("data-mode", voiceMode);
       }
