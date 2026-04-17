@@ -2,7 +2,10 @@ import { getMemory, handleMemoryAction, tryOpenTab, type WolfMemory } from "./wo
 
 export type Msg = { role: "user" | "assistant"; content: string };
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-chat`;
+const SUPABASE_CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wolf-chat`;
+const USE_DRAGON = import.meta.env.VITE_USE_DRAGON === "true";
+const DRAGON_URL = import.meta.env.VITE_DRAGON_URL as string | undefined;
+const CHAT_URL = USE_DRAGON && DRAGON_URL ? DRAGON_URL : SUPABASE_CHAT_URL;
 
 const SESSION_ID = `wolf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
