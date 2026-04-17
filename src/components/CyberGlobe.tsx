@@ -417,11 +417,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const burst: Pulse[] = [];
         const burstSize = Math.min(adj.length, 6);
         for (let k = 0; k < burstSize; k++) {
+          const e = adj[k];
+          const reverse = edges[e][0] !== nearestIdx;
           burst.push({
             id: pulseId++,
-            edgeIdx: adj[k],
+            edgeIdx: e,
             progress: 0,
             speed: 0.025 + Math.random() * 0.02,
+            reverse,
           });
         }
         setPulses((prev) => [...prev, ...burst]);
