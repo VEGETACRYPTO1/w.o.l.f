@@ -625,28 +625,262 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   );
 }
 
-// ── Background Stars ──
+// ── Background Stars (deep-space drift + constellations + warp streaks) ──
 function BackgroundStars() {
-  const ref = useRef<THREE.Points>(null);
-  const positions = useMemo(() => {
-    const count = 300;
-    const pos = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 16;
-      pos[i * 3 + 1] = (Math.random() - 0.5) * 12;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 10;
+  const COUNT = 300;
+  const BOUNDS = { x: 8, y: 6, z: 5 }; // half-extents; total 16x12x10
+
+  const groupRef = useRef<THREE.Group>(null);
+  const starsRef = useRef<THREE.Points>(null);
+  const linesRef = useRef<THREE.LineSegments>(null);
+  const streaksRef = useRef<THREE.Group>(null);
+
+  // Build star positions, per-star velocity, and depth/layer factor
+  const { positions, velocities, depths, linePositions, linePairs } = useMemo(() => {
+    const positions = new Float32Array(COUNT * 3);
+    const velocities = new Float32Array(COUNT * 3);
+    const depths = new Float32Array(COUNT);
+
+    for (let i = 0; i < COUNT; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * BOUNDS.x * 2;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * BOUNDS.y * 2;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * BOUNDS.z * 2;
+
+      // 3 layers: far(0.3), mid(0.65), near(1.0)
+      const r = Math.random();
+      const depth = r < 0.5 ? 0.3 : r < 0.85 ? 0.65 : 1.0;
+      depths[i] = depth;
+
+      // base drift direction (random, gentle)
+      velocities[i * 3] = (Math.random() - 0.5) * 0.04;
+      velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.04;
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.04;
     }
-    return pos;
+
+    // Build constellation pairs: for each star, connect to 1 nearest neighbor within threshold
+    const THRESH = 1.6;
+    const pairs: Array<[number, number]> = [];
+    for (let i = 0; i < COUNT; i++) {
+      let bestJ = -1;
+      let bestD = THRESH * THRESH;
+      const ax = positions[i * 3], ay = positions[i * 3 + 1], az = positions[i * 3 + 2];
+      for (let j = i + 1; j < Math.min(i + 25, COUNT); j++) {
+        const dx = positions[j * 3] - ax;
+        const dy = positions[j * 3 + 1] - ay;
+        const dz = positions[j * 3 + 2] - az;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bestD) {
+          bestD = d2;
+          bestJ = j;
+        }
+      }
+      if (bestJ !== -1) pairs.push([i, bestJ]);
+    }
+
+    const linePositions = new Float32Array(pairs.length * 6);
+    for (let k = 0; k < pairs.length; k++) {
+      const [a, b] = pairs[k];
+      linePositions[k * 6] = positions[a * 3];
+      linePositions[k * 6 + 1] = positions[a * 3 + 1];
+      linePositions[k * 6 + 2] = positions[a * 3 + 2];
+      linePositions[k * 6 + 3] = positions[b * 3];
+      linePositions[k * 6 + 4] = positions[b * 3 + 1];
+      linePositions[k * 6 + 5] = positions[b * 3 + 2];
+    }
+
+    return { positions, velocities, depths, linePositions, linePairs: pairs };
   }, []);
 
-  useFrame(({ clock }) => {
-    if (ref.current) ref.current.rotation.y = clock.getElapsedTime() * 0.005;
+  // Geometries (created once, mutated per frame)
+  const starGeom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return g;
+  }, [positions]);
+
+  const lineGeom = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(linePositions, 3));
+    return g;
+  }, [linePositions]);
+
+  // Warp streaks pool
+  type Streak = {
+    line: THREE.Line;
+    velocity: THREE.Vector3;
+    life: number;
+    maxLife: number;
+    head: THREE.Vector3;
+  };
+  const streaksPool = useRef<Streak[]>([]);
+  const nextSpawnRef = useRef<number>(1.5);
+  const elapsedRef = useRef<number>(0);
+
+  const spawnStreak = useCallback(() => {
+    if (!streaksRef.current) return;
+    if (streaksPool.current.length >= 4) return;
+
+    // spawn at a random offscreen edge
+    const edge = Math.floor(Math.random() * 4);
+    const head = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const speed = 6 + Math.random() * 6; // fast
+
+    if (edge === 0) {
+      head.set(-BOUNDS.x - 1, (Math.random() - 0.5) * BOUNDS.y * 1.5, (Math.random() - 0.5) * BOUNDS.z);
+      dir.set(1, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
+    } else if (edge === 1) {
+      head.set(BOUNDS.x + 1, (Math.random() - 0.5) * BOUNDS.y * 1.5, (Math.random() - 0.5) * BOUNDS.z);
+      dir.set(-1, (Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.2);
+    } else if (edge === 2) {
+      head.set((Math.random() - 0.5) * BOUNDS.x * 1.5, BOUNDS.y + 1, (Math.random() - 0.5) * BOUNDS.z);
+      dir.set((Math.random() - 0.5) * 0.2, -1, (Math.random() - 0.5) * 0.2);
+    } else {
+      head.set((Math.random() - 0.5) * BOUNDS.x * 1.5, -BOUNDS.y - 1, (Math.random() - 0.5) * BOUNDS.z);
+      dir.set((Math.random() - 0.5) * 0.2, 1, (Math.random() - 0.5) * 0.2);
+    }
+    dir.normalize().multiplyScalar(speed);
+
+    // streak length proportional to speed
+    const tailLen = 0.25 + speed * 0.04;
+    const tail = head.clone().sub(dir.clone().normalize().multiplyScalar(tailLen));
+
+    const geom = new THREE.BufferGeometry().setFromPoints([head.clone(), tail]);
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.15,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const line = new THREE.Line(geom, mat);
+    streaksRef.current.add(line);
+
+    streaksPool.current.push({
+      line,
+      velocity: dir,
+      life: 0,
+      maxLife: 2.5,
+      head,
+    });
+  }, []);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.05);
+    elapsedRef.current += dt;
+
+    // 1) Drift stars with parallax depth + wrap
+    const posAttr = starGeom.getAttribute("position") as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    for (let i = 0; i < COUNT; i++) {
+      const d = depths[i];
+      arr[i * 3] += velocities[i * 3] * d * dt * 60;
+      arr[i * 3 + 1] += velocities[i * 3 + 1] * d * dt * 60;
+      arr[i * 3 + 2] += velocities[i * 3 + 2] * d * dt * 60;
+
+      // wrap around bounding box
+      if (arr[i * 3] > BOUNDS.x) arr[i * 3] = -BOUNDS.x;
+      else if (arr[i * 3] < -BOUNDS.x) arr[i * 3] = BOUNDS.x;
+      if (arr[i * 3 + 1] > BOUNDS.y) arr[i * 3 + 1] = -BOUNDS.y;
+      else if (arr[i * 3 + 1] < -BOUNDS.y) arr[i * 3 + 1] = BOUNDS.y;
+      if (arr[i * 3 + 2] > BOUNDS.z) arr[i * 3 + 2] = -BOUNDS.z;
+      else if (arr[i * 3 + 2] < -BOUNDS.z) arr[i * 3 + 2] = BOUNDS.z;
+    }
+    posAttr.needsUpdate = true;
+
+    // 2) Refresh constellation line endpoints (skip pairs that wrapped — distance check)
+    const lineAttr = lineGeom.getAttribute("position") as THREE.BufferAttribute;
+    const lineArr = lineAttr.array as Float32Array;
+    const MAX_LINE_DIST_SQ = 4 * 4; // hide if endpoints wrapped far apart
+    for (let k = 0; k < linePairs.length; k++) {
+      const [a, b] = linePairs[k];
+      const ax = arr[a * 3], ay = arr[a * 3 + 1], az = arr[a * 3 + 2];
+      const bx = arr[b * 3], by = arr[b * 3 + 1], bz = arr[b * 3 + 2];
+      const dx = bx - ax, dy = by - ay, dz = bz - az;
+      if (dx * dx + dy * dy + dz * dz > MAX_LINE_DIST_SQ) {
+        // collapse line so it's invisible
+        lineArr[k * 6] = ax; lineArr[k * 6 + 1] = ay; lineArr[k * 6 + 2] = az;
+        lineArr[k * 6 + 3] = ax; lineArr[k * 6 + 4] = ay; lineArr[k * 6 + 5] = az;
+      } else {
+        lineArr[k * 6] = ax; lineArr[k * 6 + 1] = ay; lineArr[k * 6 + 2] = az;
+        lineArr[k * 6 + 3] = bx; lineArr[k * 6 + 4] = by; lineArr[k * 6 + 5] = bz;
+      }
+    }
+    lineAttr.needsUpdate = true;
+
+    // 3) Warp streaks: spawn + update + despawn
+    if (elapsedRef.current >= nextSpawnRef.current) {
+      spawnStreak();
+      nextSpawnRef.current = elapsedRef.current + 2 + Math.random() * 3;
+    }
+
+    const survivors: Streak[] = [];
+    for (const s of streaksPool.current) {
+      s.life += dt;
+      s.head.addScaledVector(s.velocity, dt);
+      const dirN = s.velocity.clone().normalize();
+      const tailLen = 0.25 + s.velocity.length() * 0.04;
+      const tail = s.head.clone().sub(dirN.multiplyScalar(tailLen));
+      const g = s.line.geometry as THREE.BufferGeometry;
+      const pa = g.getAttribute("position") as THREE.BufferAttribute;
+      const pArr = pa.array as Float32Array;
+      pArr[0] = s.head.x; pArr[1] = s.head.y; pArr[2] = s.head.z;
+      pArr[3] = tail.x; pArr[4] = tail.y; pArr[5] = tail.z;
+      pa.needsUpdate = true;
+
+      const outOfBounds =
+        Math.abs(s.head.x) > BOUNDS.x + 2 ||
+        Math.abs(s.head.y) > BOUNDS.y + 2 ||
+        Math.abs(s.head.z) > BOUNDS.z + 2;
+
+      if (s.life > s.maxLife || outOfBounds) {
+        streaksRef.current?.remove(s.line);
+        s.line.geometry.dispose();
+        (s.line.material as THREE.Material).dispose();
+      } else {
+        survivors.push(s);
+      }
+    }
+    streaksPool.current = survivors;
+
+    if (groupRef.current) groupRef.current.rotation.y += dt * 0.01;
   });
 
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      for (const s of streaksPool.current) {
+        s.line.geometry.dispose();
+        (s.line.material as THREE.Material).dispose();
+      }
+      streaksPool.current = [];
+    };
+  }, []);
+
   return (
-    <Points ref={ref} positions={positions} stride={3}>
-      <PointMaterial transparent color="#ffffff" size={0.008} sizeAttenuation depthWrite={false} opacity={0.15} blending={THREE.AdditiveBlending} />
-    </Points>
+    <group ref={groupRef}>
+      <points ref={starsRef} geometry={starGeom}>
+        <pointsMaterial
+          transparent
+          color="#ffffff"
+          size={0.008}
+          sizeAttenuation
+          depthWrite={false}
+          opacity={0.55}
+          blending={THREE.AdditiveBlending}
+        />
+      </points>
+      <lineSegments ref={linesRef} geometry={lineGeom}>
+        <lineBasicMaterial
+          transparent
+          color="#ffffff"
+          opacity={0.05}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </lineSegments>
+      <group ref={streaksRef} />
+    </group>
   );
 }
 
