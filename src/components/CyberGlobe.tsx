@@ -445,22 +445,53 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
   return (
     <group ref={groupRef}>
+      {/* Volumetric core glow — pulses originate from here */}
+      <mesh>
+        <sphereGeometry args={[0.55, 32, 32]} />
+        <meshBasicMaterial
+          ref={coreMatRef}
+          color={colors.highlight}
+          transparent
+          opacity={0.25}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[1.1, 32, 32]} />
+        <meshBasicMaterial
+          color={colors.mid}
+          transparent
+          opacity={0.05}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
+
       <lineSegments>
-        <bufferGeometry>
+        <bufferGeometry ref={lineGeomRef}>
           <bufferAttribute
             attach="attributes-position"
             count={edgePositions.length / 3}
             array={edgePositions}
             itemSize={3}
           />
+          <bufferAttribute
+            attach="attributes-color"
+            count={edgePositions.length / 3}
+            array={edgeColors}
+            itemSize={3}
+          />
         </bufferGeometry>
         <lineBasicMaterial
-          ref={lineMatRef}
-          color={colors.mid}
+          vertexColors
           transparent
-          opacity={0.18}
+          opacity={0.85}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          toneMapped={false}
         />
       </lineSegments>
 
@@ -471,7 +502,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         <sphereGeometry args={[1, 8, 8]} />
         <meshBasicMaterial
           transparent
-          opacity={0.95}
+          opacity={0.7}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           toneMapped={false}
@@ -488,7 +519,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const intensity = Math.sin(p.progress * Math.PI);
         return (
           <mesh key={p.id} position={[x, y, z]}>
-            <sphereGeometry args={[0.028, 8, 8]} />
+            <sphereGeometry args={[0.022, 8, 8]} />
             <meshBasicMaterial
               color={colors.highlight}
               transparent
