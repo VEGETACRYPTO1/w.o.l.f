@@ -245,10 +245,10 @@
 
   /* ── Wake emerge: brain/UI grows out of the orb burst ── */
   @keyframes wakeEmerge {
-    0%   { transform: scale(0.05); opacity: 0; filter: blur(8px) brightness(2); }
-    35%  { transform: scale(0.2); opacity: 0; filter: blur(6px) brightness(1.8); }
-    55%  { transform: scale(0.55); opacity: 0.4; filter: blur(3px) brightness(1.4); }
-    80%  { transform: scale(0.92); opacity: 0.85; filter: blur(0.5px) brightness(1.1); }
+    0%   { transform: scale(0.12); opacity: 0.18; filter: blur(6px) brightness(1.8); }
+    22%  { transform: scale(0.28); opacity: 0.32; filter: blur(4px) brightness(1.55); }
+    48%  { transform: scale(0.62); opacity: 0.65; filter: blur(2px) brightness(1.25); }
+    78%  { transform: scale(0.94); opacity: 0.92; filter: blur(0.4px) brightness(1.08); }
     100% { transform: scale(1); opacity: 1; filter: blur(0) brightness(1); }
   }
 
