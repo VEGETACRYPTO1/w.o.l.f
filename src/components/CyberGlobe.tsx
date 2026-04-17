@@ -144,7 +144,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const HOVER_RADIUS = 0.9;
   const CORE_RADIUS = 0.9; // nodes within this distance from center are "core"
 
-  const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
+  const { nodes, edges, edgePositions, firingPhases, edgesByNode, coreNodes, outwardEdgeDir } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
 
     const edges: [number, number][] = [];
