@@ -135,7 +135,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineGeomRef = useRef<THREE.BufferGeometry>(null);
-  const coreMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const lineGeomRef = useRef<THREE.BufferGeometry>(null);
 
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
@@ -372,7 +372,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           edgeGlow[e] *= decay;
           const g = edgeGlow[e];
           // Lift base brightness slightly with heartbeat
-          const ambient = 0.55 + beat * 0.25;
+          const ambient = 0.55 + (breath - 1) * 0.6;
           const r = baseR * ambient + (hiR - baseR * ambient) * g;
           const gg = baseG * ambient + (hiG - baseG * ambient) * g;
           const b = baseB * ambient + (hiB - baseB * ambient) * g;
@@ -438,30 +438,6 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
   return (
     <group ref={groupRef}>
-      {/* Volumetric core glow — pulses originate from here */}
-      <mesh>
-        <sphereGeometry args={[0.55, 32, 32]} />
-        <meshBasicMaterial
-          ref={coreMatRef}
-          color={colors.highlight}
-          transparent
-          opacity={0.25}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
-      <mesh>
-        <sphereGeometry args={[1.1, 32, 32]} />
-        <meshBasicMaterial
-          color={colors.mid}
-          transparent
-          opacity={0.05}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </mesh>
 
       <lineSegments>
         <bufferGeometry ref={lineGeomRef}>
