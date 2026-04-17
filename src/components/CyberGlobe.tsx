@@ -136,10 +136,10 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
 
-  const NODE_COUNT = 560;
-  const MAX_EDGES_PER_NODE = 6;
-  const NEIGHBOR_DIST = 0.48;
-  const MAX_PULSES = 90;
+  const NODE_COUNT = 336;
+  const MAX_EDGES_PER_NODE = 3;
+  const NEIGHBOR_DIST = 0.42;
+  const MAX_PULSES = 70;
   const HOVER_RADIUS = 0.9;
 
   const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
