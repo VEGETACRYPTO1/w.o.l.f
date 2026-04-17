@@ -1,61 +1,24 @@
 
-**Goal:** (1) Heavily reduce stars + constellations, (2) Add sleep/wake state with a centered energy ball gating the full UI.
+**Goal:** Transform background stars from static field into a living deep-space travel scene, scoped only to the existing `BackgroundStars` setup in `src/components/CyberGlobe.tsx`.
 
----
+**Changes (1 file: `src/components/CyberGlobe.tsx`)**
 
-### Part 1 — Tone down background (`src/components/CyberGlobe.tsx`)
-- Stars: 300 → **90**
-- Constellation pairs: only build for ~**15%** of stars (random skip), and tighten threshold from 1.6 → 1.0 so far stars never connect
-- Line opacity: 0.05 → **0.025** (barely visible)
-- Streaks unchanged (already rare)
+1. **Drifting stars with parallax depth**
+   - Assign each background star a per-star velocity vector + a depth/layer factor (3 layers: far/mid/near).
+   - Far stars drift very slowly, near stars drift faster — creates parallax.
+   - Per frame: update star positions by `velocity * depthFactor * dt`. Wrap stars around a bounding sphere/box so they re-enter from the opposite side (infinite field).
+   - Push updated positions into the star `BufferGeometry` `position` attribute and flag `needsUpdate`.
 
-### Part 2 — Sleep/Wake system
+2. **Dynamic constellation lines that follow the stars**
+   - Keep the existing nearest-neighbor connection logic, but rebuild the line segment positions every frame from the moved star positions (same index pairs — no re-computation of neighbors, just refresh endpoints).
+   - Lines remain at ~5% white opacity, so they appear to gently breathe with the drift.
 
-**New file: `src/contexts/WakeContext.tsx`**
-- Provides `{ awake: boolean, wake(): void, sleep(): void }`
-- Starts `awake = false` (sleep state on first load)
-- Persists to `localStorage` so refresh keeps state
+3. **Warp streaks (subtle passing stars)**
+   - Maintain a small pool (max 3-5 active at a time) of "streak" stars: separate `THREE.Line` segments with additive blending, white, low opacity (~15%).
+   - Spawn one every 2-5s at a random offscreen edge with a high-velocity vector aimed roughly past the camera. Length scales with speed.
+   - Despawn when out of bounds. Capped count keeps it "just a few".
 
-**New file: `src/components/EnergyBall.tsx`**
-- Standalone full-screen `<Canvas>` with a single glowing icosahedron + soft additive particle halo
-- Breathes (scale sine), rotates, reacts to mic via `getSpeakingIntensity()` from existing `brainEvents`
-- Color from `useMode()` (uses `modeColors.highlight`)
-- Two animation modes:
-  - **Idle**: gentle breathe + rotate
-  - **Bursting** (when wake fires): scales up, particles explode outward, then fades out → triggers `onBurstComplete`
-  - **Imploding** (when sleep fires): receives external particles spiraling inward (purely visual on EnergyBall side it just pulses bright as they "land"), then settles to idle
-- Exposes imperative trigger via prop or context
+4. **Scope guarantee**
+   - All changes live inside the `BackgroundStars` component / setup block. Brain mesh, pulses, shockwave, breathing, and CRT scanline overlay are untouched.
 
-**New file: `src/components/SleepWakeListener.tsx`**
-- Mounts a `SpeechRecognition` (Web Speech API) when **awake=false** to listen for "wake up" / "wolf" → calls `wake()`
-- When **awake=true**, listens for "go to sleep" / "sleep" → calls `sleep()`
-- Reuses logic similar to existing `wolfVoice` but lightweight (just trigger phrases). To avoid conflicting with the main voice system, only this minimal recognizer runs in sleep mode; in awake mode the existing wolfVoice handles its own listening but we ALSO route the "sleep" phrase through it via a small hook (subscribe to a new event or piggyback `onTranscript`).
-- Simpler approach: run a dedicated lightweight recognizer that always listens for those specific trigger words regardless of mode; the existing main voice system continues separately. Web Speech API allows multiple recognizers but it's flaky — instead we'll only run the trigger recognizer when **awake=false** (sleep), and when awake we hook into the existing `wolfVoice` transcript stream (add an `onTranscript` listener). 
-- Check `wolfVoice.ts` for an existing transcript callback hook; if present, subscribe; if not, add a tiny exported `onTranscript` event.
-
-**Modify `src/App.tsx` (or `AppLayout.tsx`)**
-- Wrap routes in `<WakeProvider>`
-- Conditionally render:
-  - `awake === false` → only `<EnergyBall />` + `<SleepWakeListener />`. No sidebar, no header, no chat, no brain.
-  - `awake === true` → existing layout, fades in via `transition-opacity duration-700`. Brain particles "form" effect: brain mounts with an `entering` animation (handled by adding an `appearing` flag to `BrainNetwork` that scales nodes from 0 over ~1s). EnergyBall fades out simultaneously.
-- Sleep transition: when `sleep()` is called, set an `transitioning` flag → fade out UI (700ms) → unmount UI → mount EnergyBall pulsing bright once → set `awake=false`.
-
-**Modify `src/components/CyberGlobe.tsx`**
-- Accept optional `appearing` prop (default false). When true, multiply node scales by an eased `[0..1]` value over the first 1.2s after mount. This gives the "particles forming the brain" feel.
-
-**Modify `src/lib/wolfVoice.ts`**
-- Quickly inspect: if it already exposes an `onTranscript` subscriber, use it. Otherwise add `subscribeTranscript(cb)` that fires on every recognized phrase. Keep changes minimal and additive (no behavior change to existing voice logic).
-
-### Files
-- **Edit**: `src/components/CyberGlobe.tsx` (reduce stars/lines, add `appearing` prop)
-- **Edit**: `src/App.tsx` (wrap with WakeProvider, gate UI)
-- **Edit**: `src/lib/wolfVoice.ts` (add transcript subscriber if missing — additive only)
-- **New**: `src/contexts/WakeContext.tsx`
-- **New**: `src/components/EnergyBall.tsx`
-- **New**: `src/components/SleepWakeListener.tsx`
-
-### Result
-- Background: sparse stars, rare faint constellations.
-- First load: black screen with one breathing glowing ball (mode color), reacting to mic.
-- Say "wake up" / "wolf" → ball bursts, brain forms from particles, full UI fades in.
-- Say "go to sleep" / "sleep" → UI fades out, brain implodes into the ball, mic stops, only ball remains.
+**Result:** The brain feels suspended in deep space, slowly traveling — distant stars drift gently, near stars slide by faster, faint constellation web flexes with them, and the occasional star streaks past like a warp moment.
