@@ -1,52 +1,57 @@
 
-Goal: remove the wake gap and replace the fake sleep snap with a real visible spiral collapse into the orb.
+Goal: make wake feel like the brain emerges from the orb, and make sleep show a real visible black-hole pull instead of a snap-to-black.
 
-What’s actually wrong now
-- Wake gap: `src/App.tsx` applies `wake-emerge` to the entire app wrapper, and that animation starts at low opacity/blur/scale. So while the orb is fading, the brain/UI are still dimmed, which creates the black gap.
-- Sleep snap: the current suction only targets a few DOM items with `data-bh` (time, W.O.L.F, chat button/panel). The main brain scene is not being visibly dragged on the DOM layer, so most of the screen just fades instead of spiraling.
-- Extra instability: `CyberGlobe.tsx` still has ref warnings from function components in the Three scene, which can interfere with reliable transition behavior.
+What’s actually broken now
+- The orb layer uses a full black background even during `sleeping-out`, so it visually covers the app while the suction is supposed to happen.
+- The brain only renders in `awake`, not during `waking`, so it cannot visibly form out of the burst.
+- The current black-hole effect is split between wrapper tinting, a full-screen `data-bh` globe layer, and a short timeout, so the pull reads weakly.
 
 Plan
 
-1. Fix the wake gap in `src/App.tsx` and `src/index.css`
-- Remove the wrapper-level `wake-emerge` effect from the whole app.
-- Keep the app fully present during `waking`, and animate only the brain/core formation itself.
-- Replace the current low-opacity startup with a center-origin brain formation so the brain is already visible behind the orb burst.
-- Result: no black frame between orb and brain.
+1. Re-orchestrate wake in `src/App.tsx`
+- Render the app during `waking` as well, behind the orb.
+- Add a staged overlap:
+  - orb charges/shakes/bursts
+  - brain starts forming from center before orb fully disappears
+  - UI fades in slightly after the brain begins forming
+- This will make the brain feel like it comes out of the orb instead of appearing after it.
 
-2. Make the brain truly emerge from the orb in `src/components/CyberGlobe.tsx`
-- Rework the brain’s mount animation so it starts as a tiny dense center mass and expands outward from the orb location.
-- Add a short synchronized scale/brightness ramp on the brain itself during `waking`.
-- Keep the orb on top only during the charge/burst moment, then fade it as the brain becomes dominant.
+2. Fix the orb overlay in `src/components/EnergyBall.tsx`
+- Keep the sleep screen black only in stable `sleeping`.
+- Make the orb scene background transparent during `waking` and `sleeping-out` so the brain/UI remains visible behind it.
+- Keep the orb small and bright, with no visible extra shape around it.
 
-3. Rebuild sleep around a dedicated full-screen black-hole layer in `src/App.tsx`
-- Add a transition overlay for `sleeping-out` that clones the visible HUD pieces into absolute-positioned elements and animates those clones to center.
-- Include: date/time, W.O.L.F title, chat trigger, open chat panel, and a visual center mass for the globe.
-- Freeze interaction during `sleeping-out` so chat cannot open or change state mid-transition.
+3. Rebuild sleep timing in `src/App.tsx` + `src/contexts/WakeContext.tsx`
+- Extend `sleeping-out` long enough for the suction to fully play.
+- Keep the app mounted until the pull completes, then switch to `sleeping`.
+- Keep the orb visible at center as the destination point during the whole collapse.
 
-4. Make the sleep effect visibly spiral in `src/index.css`
-- Replace the current mild suction with stronger spiral keyframes:
-  - obvious inward travel first
-  - aggressive spin ramp near the end
-  - late collapse, not early shrink
-  - blur/stretch only in final phase
-- Separate wrapper dimming from the suction so motion stays readable instead of being hidden by fade.
+4. Make the black-hole pull readable in `src/index.css`
+- Replace the current mostly fade/shrink feel with a stronger inward travel:
+  - larger center translation
+  - faster spin ramp near the end
+  - scale collapse later, not immediately
+  - brightness stretch + blur only in the final phase
+- Tone down wrapper-level dimming so it doesn’t hide the motion.
 
-5. Strengthen the globe collapse in `src/components/CyberGlobe.tsx`
-- Make the neural core internally compress and rotate harder during `sleeping-out`.
-- Push nodes/lines inward toward center so the brain itself looks consumed, not just faded out.
-- Keep background stars subdued during sleep-out so the core collapse reads clearly.
+5. Clean up what gets sucked in
+- `src/components/AppLayout.tsx`
+  - stop relying on one giant full-screen `data-bh` wrapper as the main visible effect
+- `src/components/CyberGlobe.tsx`
+  - handle the brain collapse internally so the neural core clearly spirals/compresses into center
+  - start the brain from a tighter center state during wake so it can “grow out” of the orb
+- `src/pages/Dashboard.tsx` and `src/components/ChatOverlay.tsx`
+  - keep explicit suction targets for time/date, W.O.L.F title, chat button, chat panel
+  - ensure these remain individually visible while being pulled
 
-6. Fix transition orchestration bugs
-- `src/components/ChatOverlay.tsx`: hard-disable chat toggle and force-close panel as soon as phase leaves `awake`, so it cannot pop open during sleep.
-- `src/contexts/WakeContext.tsx`: slightly retime `waking` and `sleeping-out` so burst/collapse complete before state flips.
-- `src/App.tsx`: keep orb visible as the destination point throughout sleep-out, but do not let it cover the screen with an opaque layer during transition.
-
-7. Clean up the Three warnings in `src/components/CyberGlobe.tsx`
-- Remove improper ref usage on function components like `ParallaxCamera`, `BackgroundStars`, `BrainNetwork`, and `CursorTracker`.
-- This is not just cleanup; it reduces render instability while tuning the transitions.
+6. Refine the wake burst in `src/components/EnergyBall.tsx`
+- Smooth the burst into 3 phases:
+  - charge/compress
+  - 1s shake ramp
+  - tight bright burst with tiny fast particles
+- Crossfade the particle remnant with the brain forming animation so the transition blends instead of snapping.
 
 Expected result
-- Wake: orb charges, shakes, bursts, and the brain is already forming from the same center point with no black gap.
-- Sleep: the visible HUD and brain spiral inward toward the center orb instead of snapping/fading away.
-- Chat stays shut during sleep transitions.
+- Wake: orb charges, shakes, bursts, and the brain visibly grows out of that burst.
+- Sleep: HUD elements and the brain visibly spiral inward toward the center orb before the screen settles into the sleep state.
+- No more “snap into orb” look caused by the black full-screen orb layer.

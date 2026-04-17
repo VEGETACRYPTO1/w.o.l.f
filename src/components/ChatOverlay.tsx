@@ -135,7 +135,7 @@ export function ChatOverlay() {
 
   return (
     <>
-      <div data-bh={canInteract ? "" : undefined} className="fixed bottom-6 right-6 z-50">
+      <div data-bh className="fixed bottom-6 right-6 z-50">
         <div
           style={{
             position: "absolute",

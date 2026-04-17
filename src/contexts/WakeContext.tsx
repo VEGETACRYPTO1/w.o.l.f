@@ -43,10 +43,10 @@ export function WakeProvider({ children }: { children: React.ReactNode }) {
     import("@/lib/wolfVoice").then((m) => {
       try { m.stopHandsFree(); } catch {}
     }).catch(() => {});
-    // Long enough for the spiral suction to fully play out (2.7s)
+    // Long enough for the suction to fully play out (2.6s)
     window.setTimeout(() => {
       setPhaseState((cur) => (cur === "sleeping-out" ? "sleeping" : cur));
-    }, 2700);
+    }, 2600);
   }, []);
 
   return (
