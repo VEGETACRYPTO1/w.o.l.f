@@ -64,7 +64,7 @@ export function triggerWake() {
   isAwake = true;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  wolfSpeak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
+  wolfSpeak(`${greeting}, SK... Wolf... online.`).catch(() => {});
 }
 
 export function triggerSleep() {
