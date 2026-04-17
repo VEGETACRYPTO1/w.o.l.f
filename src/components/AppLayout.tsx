@@ -11,12 +11,11 @@ export function AppLayout({ children, phase }: { children: React.ReactNode; phas
   return (
     <div className="min-h-screen flex w-full relative bg-background">
       <div className="absolute inset-0">
+        {/* Brain always mounted — eliminates black screen gap on wake */}
         <CyberGlobe phase={phase} dissolving={dissolving} />
       </div>
       <div className="flex-1 flex flex-col min-w-0 relative z-10">
-        <main className={`flex-1 overflow-auto ${isDashboard ? "relative" : "p-6"}`}>
-          {children}
-        </main>
+        <main className={`flex-1 overflow-auto ${isDashboard ? "relative" : "p-6"}`}>{children}</main>
       </div>
       <ChatOverlay />
     </div>

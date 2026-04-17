@@ -42,17 +42,14 @@ function Starfield() {
     }
     return { positions };
   }, []);
-
   const geom = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     return g;
   }, [positions]);
-
   useFrame((_, dt) => {
     if (ref.current) ref.current.rotation.y += dt * 0.005;
   });
-
   return (
     <points ref={ref} geometry={geom}>
       <pointsMaterial
@@ -75,6 +72,9 @@ interface Particle {
   angle: number;
   radius: number;
   spiraling: boolean;
+  // target position on orb surface (for sleep)
+  targetPos: THREE.Vector3;
+  startPos: THREE.Vector3;
 }
 
 function Orb({ phase }: { phase: WakePhase }) {
@@ -116,25 +116,40 @@ function Orb({ phase }: { phase: WakePhase }) {
         angle: 0,
         radius: 0,
         spiraling: false,
+        targetPos: new THREE.Vector3(),
+        startPos: new THREE.Vector3(),
       });
     }
     particles.current = arr;
   };
 
-  // Spiral inward like a black hole
+  // Particles start scattered and spiral inward, then FORM the orb shape
   const triggerSuck = () => {
     const arr: Particle[] = [];
     for (let i = 0; i < POOL; i++) {
-      // Start particles scattered around the screen
       const angle = Math.random() * Math.PI * 2;
       const radius = 1.5 + Math.random() * 3.5;
+      const startPos = new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, (Math.random() - 0.5) * 2);
+
+      // Target: point on orb surface sphere
+      const phi = Math.acos(2 * Math.random() - 1);
+      const theta = Math.random() * Math.PI * 2;
+      const orbR = 0.12;
+      const targetPos = new THREE.Vector3(
+        orbR * Math.sin(phi) * Math.cos(theta),
+        orbR * Math.sin(phi) * Math.sin(theta),
+        orbR * Math.cos(phi),
+      );
+
       arr.push({
-        pos: new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, (Math.random() - 0.5) * 1.5),
+        pos: startPos.clone(),
         vel: new THREE.Vector3(0, 0, 0),
-        life: 0.6 + Math.random() * 0.4,
+        life: 1,
         angle,
         radius,
         spiraling: true,
+        targetPos,
+        startPos: startPos.clone(),
       });
     }
     particles.current = arr;
@@ -144,16 +159,15 @@ function Orb({ phase }: { phase: WakePhase }) {
     const dt = Math.min(delta, 0.05);
     const t = performance.now() / 1000;
     const audio = getSpeakingIntensity();
-
     const phaseAge = t - phaseStartRef.current;
     const p = phaseRef.current;
-
     const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.25;
 
     let sizeMul = 1;
     let intensityMul = 1;
     let rotSpeed = 0.3;
     let opacityMul = 1;
+    let showOrb = true;
 
     if (p === "waking") {
       const a = phaseAge;
@@ -169,22 +183,16 @@ function Orb({ phase }: { phase: WakePhase }) {
         intensityMul = 6;
         opacityMul = 0;
       } else {
-        // FIX: keep orb visible longer to bridge gap with brain forming
         const k = Math.min(1, (a - 1.15) / 1.8);
         sizeMul = 0;
         opacityMul = Math.max(0, 1 - k);
       }
     }
 
-    // FIX: Black hole sleep animation
+    // Sleep: hide orb mesh, particles form the orb shape
     if (p === "sleeping-out") {
-      const a = phaseAge;
-      const progress = Math.min(1, a / 2.2);
-      // Orb grows slightly then stabilizes as particles spiral in
-      sizeMul = 0.3 + progress * 0.7;
-      intensityMul = 1 + progress * 3;
-      rotSpeed = 0.3 + progress * 6;
-      opacityMul = 1;
+      showOrb = false;
+      opacityMul = 0;
     }
 
     const shake = p === "waking" && phaseAge < 1.0 ? (Math.random() - 0.5) * 0.06 * Math.pow(phaseAge / 1.0, 2) : 0;
@@ -197,14 +205,14 @@ function Orb({ phase }: { phase: WakePhase }) {
     }
 
     if (coreRef.current) {
-      const s = 0.07 * breath * sizeMul;
+      const s = showOrb ? 0.07 * breath * sizeMul : 0;
       coreRef.current.scale.setScalar(s);
       const m = coreRef.current.material as THREE.MeshBasicMaterial;
       m.color.copy(GOLD_HI).lerp(WHITE, Math.min(1, (intensityMul - 1) * 0.4));
       m.opacity = opacityMul;
     }
     if (innerRef.current) {
-      const s = 0.04 * breath * sizeMul * (1 + audio * 0.2);
+      const s = showOrb ? 0.04 * breath * sizeMul * (1 + audio * 0.2) : 0;
       innerRef.current.scale.setScalar(s);
       const m = innerRef.current.material as THREE.MeshBasicMaterial;
       m.opacity = opacityMul * Math.min(1.5, intensityMul);
@@ -218,14 +226,40 @@ function Orb({ phase }: { phase: WakePhase }) {
         if (!part) continue;
 
         if (part.spiraling) {
-          // BLACK HOLE spiral: rotate around center while pulling inward
-          const progress = Math.min(1, phaseAge / 2.2);
-          part.angle += dt * (2 + progress * 8); // spin faster over time
-          part.radius *= 1 - dt * (0.4 + progress * 1.2); // shrink radius fast
-          part.pos.x = Math.cos(part.angle) * part.radius;
-          part.pos.y = Math.sin(part.angle) * part.radius * 0.6;
-          part.pos.z *= 1 - dt * 1.5;
-          part.life = part.radius > 0.05 ? 1 : 0;
+          // Phase 1 (0-1.4s): spiral inward
+          // Phase 2 (1.4-2.8s): particles on orb surface, slowly orbiting
+          const SPIRAL_PHASE = 1.4;
+          const ORB_PHASE = 2.8;
+
+          if (phaseAge < SPIRAL_PHASE) {
+            // Spiral inward with rotation
+            const progress = phaseAge / SPIRAL_PHASE;
+            const eased = progress * progress;
+            part.angle += dt * (1.5 + eased * 10);
+            part.radius *= 1 - dt * (0.3 + eased * 1.8);
+            part.pos.x = Math.cos(part.angle) * part.radius;
+            part.pos.y = Math.sin(part.angle) * part.radius * 0.6;
+            part.pos.z *= 1 - dt * 2;
+            part.life = 1;
+          } else if (phaseAge < ORB_PHASE) {
+            // Particles arrive at orb surface — lerp to target
+            const progress = (phaseAge - SPIRAL_PHASE) / (ORB_PHASE - SPIRAL_PHASE);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            part.pos.lerpVectors(
+              new THREE.Vector3(
+                Math.cos(part.angle) * Math.max(part.radius, 0.01),
+                Math.sin(part.angle) * Math.max(part.radius, 0.01) * 0.6,
+                part.pos.z,
+              ),
+              part.targetPos,
+              eased * dt * 3,
+            );
+            // Slow orbit on surface
+            part.angle += dt * 0.5;
+            part.life = 1;
+          } else {
+            part.life = 0;
+          }
         } else {
           part.pos.addScaledVector(part.vel, dt);
           part.vel.multiplyScalar(0.955);
@@ -237,7 +271,7 @@ function Orb({ phase }: { phase: WakePhase }) {
         positions[i * 3 + 1] = part.pos.y;
         positions[i * 3 + 2] = part.pos.z;
         const life = Math.max(0, part.life);
-        const c = GOLD.clone().lerp(WHITE, life * life);
+        const c = GOLD.clone().lerp(WHITE, life * 0.3);
         colorsArr[i * 3] = c.r;
         colorsArr[i * 3 + 1] = c.g;
         colorsArr[i * 3 + 2] = c.b;
