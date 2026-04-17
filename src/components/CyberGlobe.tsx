@@ -351,15 +351,16 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           }
         }
 
-        const baseScale = 0.011;
-        let scale = baseScale + fire * 0.05 + proximity * 0.025 + waveBoost * 0.04 + audio * 0.012;
+        // Subtle dot scale (60% reduction in glow scale contribution)
+        const baseScale = 0.008;
+        let scale = baseScale + fire * 0.018 + proximity * 0.012 + waveBoost * 0.018 + audio * 0.005;
 
-        // Color: idle = mid, firing = highlight
-        tmpColor.copy(midColor).lerp(highlightColor, fire);
+        // Color: dim mid → highlight when firing (lower base brightness)
+        tmpColor.copy(shadowColor).lerp(midColor, 0.5).lerp(highlightColor, fire * 0.7);
 
         if (i === flashing) {
-          tmpColor.lerp(whiteColor, flashStrength);
-          scale += flashStrength * 0.08;
+          tmpColor.lerp(whiteColor, flashStrength * 0.6);
+          scale += flashStrength * 0.04;
         }
         if (waveBoost > 0.3) tmpColor.lerp(whiteColor, waveBoost * 0.5);
 
