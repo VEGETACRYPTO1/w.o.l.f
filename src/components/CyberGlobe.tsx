@@ -313,8 +313,8 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   const tmpColor = useMemo(() => new THREE.Color(), []);
 
   // Ripple amplitude — subtle, won't look jelly
-  const RIPPLE_AMP = 0.04;
-  const RIPPLE_SPEED = 0.6;
+  const RIPPLE_AMP = 0.12;
+  const RIPPLE_SPEED = 0.4;
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
