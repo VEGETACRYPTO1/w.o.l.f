@@ -127,6 +127,7 @@ interface Pulse {
   edgeIdx: number;
   progress: number;
   speed: number;
+  reverse: boolean; // if true, travels from edges[e][1] -> edges[e][0]
 }
 
 let pulseId = 0;
@@ -139,10 +140,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
   const NEIGHBOR_DIST = 0.48;
-  const MAX_PULSES = 90;
+  const MAX_PULSES = 140;
   const HOVER_RADIUS = 0.9;
+  const CORE_RADIUS = 0.9; // nodes within this distance from center are "core"
 
-  const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
+  const { nodes, edges, edgePositions, firingPhases, edgesByNode, coreNodes, outwardEdgeDir } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
 
     const edges: [number, number][] = [];
@@ -188,7 +190,21 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const firingPhases = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
 
-    return { nodes, edges, edgePositions, firingPhases, edgesByNode };
+    // Core node indices (close to center) — pulses originate here
+    const coreNodes: number[] = [];
+    for (let i = 0; i < nodes.length; i++) {
+      if (nodes[i].length() < CORE_RADIUS) coreNodes.push(i);
+    }
+
+    // Precompute outward direction for each edge: which endpoint is farther from center
+    // outwardEdgeDir[e] = 1 if going from edges[e][0] -> edges[e][1] is outward, else 0 (reverse)
+    const outwardEdgeDir = new Uint8Array(edges.length);
+    for (let e = 0; e < edges.length; e++) {
+      const [i, j] = edges[e];
+      outwardEdgeDir[e] = nodes[j].length() >= nodes[i].length() ? 1 : 0;
+    }
+
+    return { nodes, edges, edgePositions, firingPhases, edgesByNode, coreNodes, outwardEdgeDir };
   }, []);
 
   const [pulses, setPulses] = useState<Pulse[]>([]);
@@ -209,26 +225,32 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     hoverPoint.current = local;
   }, []);
 
-  // Subscribe to brain wave events from chat
+  // Subscribe to brain wave events from chat — originate from a core node
   useEffect(() => {
     const off = onBrainEvent("wave", () => {
-      const idx = Math.floor(Math.random() * nodes.length);
+      const idx = coreNodes.length > 0
+        ? coreNodes[Math.floor(Math.random() * coreNodes.length)]
+        : Math.floor(Math.random() * nodes.length);
       waveOrigin.current = nodes[idx].clone();
       waveStart.current = performance.now() / 1000;
       const adj = edgesByNode[idx];
       const burst: Pulse[] = [];
       for (let k = 0; k < Math.min(adj.length, 8); k++) {
+        const e = adj[k];
+        // Reverse so pulse travels outward from this node
+        const reverse = edges[e][0] !== idx;
         burst.push({
           id: pulseId++,
-          edgeIdx: adj[k],
+          edgeIdx: e,
           progress: 0,
           speed: 0.03 + Math.random() * 0.02,
+          reverse,
         });
       }
       setPulses((prev) => [...prev, ...burst]);
     });
     return () => { off(); };
-  }, [nodes, edgesByNode]);
+  }, [nodes, edgesByNode, coreNodes, edges]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
@@ -269,8 +291,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     shadowColor.lerp(targetShadow.current, 0.04);
 
     const audio = getSpeakingIntensity();
-    // Bigger breathing (15% amplitude) + audio-driven extra
-    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.08;
+    // Heartbeat breathing: slower, deeper double-beat
+    const heartbeat =
+      Math.pow(Math.max(0, Math.sin(t * 0.45)), 2) * 0.22 +
+      Math.pow(Math.max(0, Math.sin(t * 0.45 + 0.35)), 4) * 0.10;
+    const breath = 0.92 + heartbeat + audio * 0.12;
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.0012 + audio * 0.004;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
@@ -326,15 +351,16 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           }
         }
 
-        const baseScale = 0.011;
-        let scale = baseScale + fire * 0.05 + proximity * 0.025 + waveBoost * 0.04 + audio * 0.012;
+        // Subtle dot scale (60% reduction in glow scale contribution)
+        const baseScale = 0.008;
+        let scale = baseScale + fire * 0.018 + proximity * 0.012 + waveBoost * 0.018 + audio * 0.005;
 
-        // Color: idle = mid, firing = highlight
-        tmpColor.copy(midColor).lerp(highlightColor, fire);
+        // Color: dim mid → highlight when firing (lower base brightness)
+        tmpColor.copy(shadowColor).lerp(midColor, 0.5).lerp(highlightColor, fire * 0.7);
 
         if (i === flashing) {
-          tmpColor.lerp(whiteColor, flashStrength);
-          scale += flashStrength * 0.08;
+          tmpColor.lerp(whiteColor, flashStrength * 0.6);
+          scale += flashStrength * 0.04;
         }
         if (waveBoost > 0.3) tmpColor.lerp(whiteColor, waveBoost * 0.5);
 
@@ -349,24 +375,33 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     }
 
     if (lineMatRef.current) {
-      lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
-      lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
+      // Lines are the star — brighter, more present
+      lineMatRef.current.color.copy(midColor).lerp(highlightColor, 0.25);
+      lineMatRef.current.opacity = 0.42 + Math.sin(t * 0.9) * 0.06 + audio * 0.15;
     }
 
-    // Spawn pulses (denser ambient firing, more during speech)
+    // Spawn pulses from CORE outward (denser, more during speech)
     if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
       const newPulses: Pulse[] = [];
-      const spawnCount = 2 + Math.floor(Math.random() * 4) + Math.floor(audio * 5);
+      const spawnCount = 3 + Math.floor(Math.random() * 5) + Math.floor(audio * 6);
       for (let k = 0; k < spawnCount; k++) {
+        // Pick a random core node, then a random edge from it, traveling outward
+        const coreIdx = coreNodes[Math.floor(Math.random() * coreNodes.length)];
+        const adj = edgesByNode[coreIdx];
+        if (adj.length === 0) continue;
+        const e = adj[Math.floor(Math.random() * adj.length)];
+        // Reverse if edges[e][0] is not the core node (we want to start at coreIdx)
+        const reverse = edges[e][0] !== coreIdx;
         newPulses.push({
           id: pulseId++,
-          edgeIdx: Math.floor(Math.random() * edges.length),
+          edgeIdx: e,
           progress: 0,
           speed: 0.012 + Math.random() * 0.02 + audio * 0.02,
+          reverse,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
-      nextSpawn.current = t + 0.05 + Math.random() * 0.18 - audio * 0.1;
+      nextSpawn.current = t + 0.04 + Math.random() * 0.14 - audio * 0.08;
     }
 
     // Hover burst — find nearest node, fire pulses along its edges
@@ -382,11 +417,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const burst: Pulse[] = [];
         const burstSize = Math.min(adj.length, 6);
         for (let k = 0; k < burstSize; k++) {
+          const e = adj[k];
+          const reverse = edges[e][0] !== nearestIdx;
           burst.push({
             id: pulseId++,
-            edgeIdx: adj[k],
+            edgeIdx: e,
             progress: 0,
             speed: 0.025 + Math.random() * 0.02,
+            reverse,
           });
         }
         setPulses((prev) => [...prev, ...burst]);
@@ -429,7 +467,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         <sphereGeometry args={[1, 8, 8]} />
         <meshBasicMaterial
           transparent
-          opacity={0.95}
+          opacity={0.4}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
           toneMapped={false}
@@ -437,7 +475,8 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       </instancedMesh>
 
       {pulses.map((p) => {
-        const [i, j] = edges[p.edgeIdx];
+        const [i0, j0] = edges[p.edgeIdx];
+        const [i, j] = p.reverse ? [j0, i0] : [i0, j0];
         const a = nodes[i];
         const b = nodes[j];
         const x = a.x + (b.x - a.x) * p.progress;
@@ -446,7 +485,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const intensity = Math.sin(p.progress * Math.PI);
         return (
           <mesh key={p.id} position={[x, y, z]}>
-            <sphereGeometry args={[0.028, 8, 8]} />
+            <sphereGeometry args={[0.022, 8, 8]} />
             <meshBasicMaterial
               color={colors.highlight}
               transparent
