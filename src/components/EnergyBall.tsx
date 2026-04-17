@@ -18,7 +18,7 @@ function Bloom() {
     const c = new EffectComposer(gl);
     c.addPass(new RenderPass(scene, camera));
     // Tighter, sharper bloom — like brain nodes, not a glowing blob
-    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 0.9, 0.4, 0.15));
+    c.addPass(new UnrealBloomPass(new THREE.Vector2(size.width, size.height), 1.6, 0.55, 0.05));
     composer.current = c;
     return () => c.dispose();
   }, [gl, scene, camera, size]);
