@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -20,17 +21,35 @@ function WakeGate() {
   const { phase } = useWake();
   const showApp = phase === "awake" || phase === "sleeping-out";
   const showOrb = phase === "sleeping" || phase === "waking" || phase === "sleeping-out";
-  const appFadingOut = phase === "sleeping-out";
+  const sucking = phase === "sleeping-out";
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // When entering sleeping-out, compute per-element vector toward viewport center
+  // and write it into a CSS var so the keyframe pulls each element to the orb.
+  useEffect(() => {
+    if (!sucking || !wrapperRef.current) return;
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight / 2;
+    const els = wrapperRef.current.querySelectorAll<HTMLElement>("[data-bh]");
+    els.forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const ex = r.left + r.width / 2;
+      const ey = r.top + r.height / 2;
+      const dx = cx - ex;
+      const dy = cy - ey;
+      el.style.setProperty("--bh-translate", `translate(${dx}px, ${dy}px)`);
+    });
+  }, [sucking]);
 
   return (
     <>
       {showApp && (
         <div
-          className={`transition-opacity duration-700 ${appFadingOut ? "opacity-0" : "opacity-100 animate-fade-in"}`}
-          style={{ pointerEvents: appFadingOut ? "none" : "auto" }}
+          ref={wrapperRef}
+          className={`${sucking ? "black-hole-active" : "animate-fade-in"}`}
         >
           <BrowserRouter>
-            <AppLayout dissolving={appFadingOut}>
+            <AppLayout dissolving={sucking}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/goals" element={<Goals />} />
@@ -63,3 +82,4 @@ const App = () => (
 );
 
 export default App;
+
