@@ -433,7 +433,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
     setPulses((prev) =>
       prev
-        .map((p) => ({ ...p, progress: p.progress + p.speed }))
+        .map((p) => {
+          const next = p.progress + p.speed;
+          // Bump glow on the edge as the pulse traverses it
+          edgeGlow[p.edgeIdx] = Math.min(1, edgeGlow[p.edgeIdx] + 0.55);
+          return { ...p, progress: next };
+        })
         .filter((p) => p.progress <= 1)
     );
   });
