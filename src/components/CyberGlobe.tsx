@@ -201,9 +201,33 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const hoverPoint = useRef<THREE.Vector3 | null>(null);
   const lastBurst = useRef(0);
 
+  // Chat wave: origin point + start time
+  const waveOrigin = useRef<THREE.Vector3 | null>(null);
+  const waveStart = useRef(0);
+
   const handleHover = useCallback((local: THREE.Vector3 | null) => {
     hoverPoint.current = local;
   }, []);
+
+  // Subscribe to brain wave events from chat
+  useEffect(() => {
+    return onBrainEvent("wave", () => {
+      const idx = Math.floor(Math.random() * nodes.length);
+      waveOrigin.current = nodes[idx].clone();
+      waveStart.current = performance.now() / 1000;
+      const adj = edgesByNode[idx];
+      const burst: Pulse[] = [];
+      for (let k = 0; k < Math.min(adj.length, 8); k++) {
+        burst.push({
+          id: pulseId++,
+          edgeIdx: adj[k],
+          progress: 0,
+          speed: 0.03 + Math.random() * 0.02,
+        });
+      }
+      setPulses((prev) => [...prev, ...burst]);
+    });
+  }, [nodes, edgesByNode]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
