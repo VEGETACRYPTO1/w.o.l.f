@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useWake } from "@/contexts/WakeContext";
+import { triggerWake, triggerSleep, processVoiceCommand } from "@/lib/wolfVoice";
 
 export function SleepWakeListener() {
   const { phase, wake, sleep } = useWake();
@@ -16,6 +17,7 @@ export function SleepWakeListener() {
     let stopped = false;
 
     const start = () => {
+      if (rec) return;
       try {
         rec = new SR();
         rec.continuous = true;
@@ -26,18 +28,27 @@ export function SleepWakeListener() {
           const text = e.results[e.results.length - 1][0].transcript
             .toLowerCase()
             .trim();
+          console.log("🎤 Heard:", text);
           const p = phaseRef.current;
+
           if (p === "sleeping") {
             if (
               text.includes("wake up") ||
               text.includes("hey wolf") ||
+              text.includes("hello wolf") ||
               text === "wolf" ||
               text.includes(" wolf")
             ) {
+              triggerWake();
               wake();
             }
-          } else if (p === "awake") {
-            if (text.includes("go to sleep") || text.includes("sleep")) {
+            return;
+          }
+
+          if (p === "awake") {
+            const result = processVoiceCommand(text);
+            if (result === "sleep") {
+              triggerSleep();
               sleep();
             }
           }
@@ -50,10 +61,10 @@ export function SleepWakeListener() {
           if (!stopped) setTimeout(() => { try { rec?.start(); } catch {} }, 600);
         };
         rec.start();
+        console.log("🎤 SleepWakeListener active");
       } catch {}
     };
 
-    // Need user gesture to start in some browsers — try anyway, also retry on first click
     start();
     const onClick = () => { if (!rec) start(); };
     document.addEventListener("click", onClick, { once: true });

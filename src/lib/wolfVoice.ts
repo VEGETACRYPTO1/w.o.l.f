@@ -50,11 +50,32 @@ function unlockAudio() {
 if (typeof window !== "undefined") {
   document.body?.addEventListener("click", () => {
     unlockAudio();
-    if (!_isListening) {
-      _autoStartListening();
-      console.log("🐺 WOLF listening active");
-    }
   }, { once: true });
+}
+
+// External wake trigger (called by SleepWakeListener)
+export function triggerWake() {
+  if (isAwake) return;
+  isAwake = true;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  wolfSpeak(`${greeting}, SK. W.O.L.F online.`).catch(() => {});
+}
+
+export function triggerSleep() {
+  isAwake = false;
+}
+
+// Process a transcript when awake: mode switches, sleep command, then chat
+export function processVoiceCommand(text: string): "mode" | "sleep" | "command" | "none" {
+  const t = text.toLowerCase().trim();
+  if (!t) return "none";
+  if (t.includes("war mode")) { setMode("war"); wolfSpeak("war mode activated").catch(()=>{}); return "mode"; }
+  if (t.includes("relax mode")) { setMode("relax"); wolfSpeak("relax mode activated").catch(()=>{}); return "mode"; }
+  if (t.includes("intelligence mode")) { setMode("intelligence"); wolfSpeak("intelligence mode activated").catch(()=>{}); return "mode"; }
+  if (t.includes("go to sleep")) return "sleep";
+  if (commandCallback) { commandCallback(text); return "command"; }
+  return "none";
 }
 
 // ==========================
