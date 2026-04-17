@@ -1,101 +1,104 @@
 // ==========================
-// 🐺 W.O.L.F CORE FIXED SYSTEM
+// 🐺 W.O.L.F CORE — RESEMBLE AI VOICE
 // ==========================
 
 export type VoiceMode = "intelligence" | "war" | "relax";
+
+const RESEMBLE_API_KEY = import.meta.env.VITE_RESEMBLE_API_KEY || "";
+const RESEMBLE_VOICE_UUID = "aa8053cc";
+const RESEMBLE_URL = "https://p.cluster.resemble.ai/synthesize";
 
 let onModeChangeCallback: ((mode: VoiceMode) => void) | null = null;
 export function onModeChange(cb: (mode: VoiceMode) => void) {
   onModeChangeCallback = cb;
 }
 
-let voices: SpeechSynthesisVoice[] = [];
-let audioReady = false;
 let isAwake = false;
 let currentMode: VoiceMode = "intelligence";
 let commandCallback: ((text: string) => void) | null = null;
+let currentAudio: HTMLAudioElement | null = null;
 
 // ==========================
-// 🔊 LOAD VOICES
+// 🔊 RESEMBLE AI SPEAK
 // ==========================
 
-function loadVoices() {
-  voices = speechSynthesis.getVoices();
-  if (voices.length > 0) console.log("🔊 Voices loaded:", voices.length);
-}
+async function wolfSpeak(text: string): Promise<void> {
+  const clean = text.replace(/\n/g, " ").trim();
 
-if (typeof window !== "undefined" && window.speechSynthesis) {
-  speechSynthesis.onvoiceschanged = loadVoices;
-  loadVoices();
-}
+  if (!clean) return Promise.resolve();
 
-// ==========================
-// 🔓 UNLOCK AUDIO
-// ==========================
+  // Stop any current audio
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
 
-function unlockAudio() {
-  if (audioReady) return;
   try {
-    const u = new SpeechSynthesisUtterance(" ");
-    speechSynthesis.speak(u);
+    import("./brainEvents").then((m) => m.setSpeakingActive(true)).catch(() => {});
+
+    const response = await fetch(RESEMBLE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${RESEMBLE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        voice_uuid: RESEMBLE_VOICE_UUID,
+        data: clean,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log("❌ Resemble error:", response.status);
+      // Fallback to browser voice
+      return browserSpeak(clean);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    currentAudio = audio;
+
+    return new Promise<void>((resolve) => {
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
+        resolve();
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        currentAudio = null;
+        import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
+        resolve();
+      };
+      audio.play().catch(() => {
+        browserSpeak(clean).then(resolve);
+      });
+    });
+  } catch (err) {
+    console.log("❌ Resemble failed, using browser voice:", err);
+    import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
+    return browserSpeak(clean);
+  }
+}
+
+// Browser voice fallback
+function browserSpeak(text: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.12;
+    utter.pitch = 0.95;
+    utter.volume = 1;
+    utter.onend = () => resolve();
+    utter.onerror = () => resolve();
     speechSynthesis.cancel();
-    speechSynthesis.resume();
-    audioReady = true;
-    console.log("🔓 Audio unlocked");
-  } catch (e) {}
+    speechSynthesis.speak(utter);
+  });
 }
 
 if (typeof window !== "undefined") {
-  document.body?.addEventListener(
-    "click",
-    () => {
-      unlockAudio();
-    },
-    { once: true },
-  );
-}
-
-// ==========================
-// 🎯 EXTERNAL TRIGGERS
-// ==========================
-
-export function triggerWake() {
-  if (isAwake) return;
-  isAwake = true;
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  wolfSpeak(`${greeting}, SK... Wolf... online.`).catch(() => {});
-}
-
-export function triggerSleep() {
-  isAwake = false;
-}
-
-// Single entry point for all voice commands when awake
-export function processVoiceCommand(text: string): "mode" | "sleep" | "command" | "none" {
-  const t = text.toLowerCase().trim();
-  if (!t) return "none";
-  if (t.includes("war mode")) {
-    setMode("war");
-    wolfSpeak("war mode activated").catch(() => {});
-    return "mode";
-  }
-  if (t.includes("relax mode")) {
-    setMode("relax");
-    wolfSpeak("relax mode activated").catch(() => {});
-    return "mode";
-  }
-  if (t.includes("intelligence mode")) {
-    setMode("intelligence");
-    wolfSpeak("intelligence mode activated").catch(() => {});
-    return "mode";
-  }
-  if (t.includes("go to sleep") || t.includes("sleep")) return "sleep";
-  if (commandCallback) {
-    commandCallback(text);
-    return "command";
-  }
-  return "none";
+  (window as any).wolfSpeak = wolfSpeak;
 }
 
 // ==========================
@@ -114,70 +117,54 @@ function setMode(mode: VoiceMode) {
   };
   const color = colorMap[mode];
   document.documentElement.style.setProperty("--wolf-glow", color);
-  const w = window as any;
-  if (w.scene) {
-    w.scene.traverse((obj: any) => {
-      if (obj.material && obj.material.color) {
-        obj.material.color.set(color);
-      }
-    });
-  }
   onModeChangeCallback?.(mode);
   console.log("MODE:", mode);
 }
 
 // ==========================
-// 🔊 SPEAK
+// 🎯 EXTERNAL TRIGGERS
 // ==========================
 
-function wolfSpeak(text: string): Promise<void> {
-  const clean = text
-    .replace(/\./g, "... ")
-    .replace(/,/g, ", ")
-    .replace(/!/g, "! ")
-    .replace(/\?/g, "? ")
-    .replace(/:/g, "... ")
-    .replace(/\n/g, "... ")
-    .trim();
+export function triggerWake() {
+  if (isAwake) return;
+  isAwake = true;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  wolfSpeak(`${greeting}, SK. WOLF online.`).catch(() => {});
+}
 
-  if (!clean) return Promise.resolve();
-
-  if (voices.length === 0) {
-    loadVoices();
-    return new Promise((resolve) => {
-      wolfSpeak(clean).then(resolve);
-    });
-  }
-
-  try {
-    speechSynthesis.cancel();
-    speechSynthesis.pause();
-    return new Promise<void>((resolve) => {
-      const utter = new SpeechSynthesisUtterance(clean);
-      utter.rate = 1.12;
-      utter.pitch = 0.95;
-      utter.volume = 1;
-      const finish = () => {
-        import("./brainEvents").then((m) => m.setSpeakingActive(false)).catch(() => {});
-        resolve();
-      };
-      utter.onstart = () => {
-        import("./brainEvents").then((m) => m.setSpeakingActive(true)).catch(() => {});
-      };
-      utter.onend = finish;
-      utter.onerror = finish;
-      speechSynthesis.resume();
-      speechSynthesis.speak(utter);
-      console.log("🐺 WOLF speaking:", clean.substring(0, 60));
-    });
-  } catch (err) {
-    console.log("❌ voice error:", err);
-    return Promise.resolve();
+export function triggerSleep() {
+  isAwake = false;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
   }
 }
 
-if (typeof window !== "undefined") {
-  (window as any).wolfSpeak = wolfSpeak;
+export function processVoiceCommand(text: string): "mode" | "sleep" | "command" | "none" {
+  const t = text.toLowerCase().trim();
+  if (!t) return "none";
+  if (t.includes("war mode")) {
+    setMode("war");
+    wolfSpeak("War mode activated").catch(() => {});
+    return "mode";
+  }
+  if (t.includes("relax mode")) {
+    setMode("relax");
+    wolfSpeak("Relax mode activated").catch(() => {});
+    return "mode";
+  }
+  if (t.includes("intelligence mode")) {
+    setMode("intelligence");
+    wolfSpeak("Intelligence mode activated").catch(() => {});
+    return "mode";
+  }
+  if (t.includes("go to sleep") || t.includes("sleep")) return "sleep";
+  if (commandCallback) {
+    commandCallback(text);
+    return "command";
+  }
+  return "none";
 }
 
 // ==========================
@@ -186,9 +173,13 @@ if (typeof window !== "undefined") {
 
 export const speak = wolfSpeak;
 export function getIsSpeaking() {
-  return false;
+  return currentAudio !== null;
 }
 export function stopSpeaking() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio = null;
+  }
   speechSynthesis.cancel();
 }
 export function getCurrentVoiceMode(): VoiceMode {
@@ -199,7 +190,7 @@ export function setVoiceMode(mode: VoiceMode) {
   wolfSpeak(`${mode} mode activated`);
 }
 export function testVoice() {
-  wolfSpeak("W.O.L.F fully operational, SK.");
+  wolfSpeak("Wolf fully operational, SK.");
 }
 export function isWolfActive() {
   return isAwake;
@@ -231,10 +222,6 @@ export function replayLast() {
   const last = msgs[msgs.length - 1];
   if (last) wolfSpeak(last.textContent || "");
 }
-
-// ==========================
-// 🚀 INIT
-// ==========================
 
 if (typeof window !== "undefined") {
   window.addEventListener("load", () => {
