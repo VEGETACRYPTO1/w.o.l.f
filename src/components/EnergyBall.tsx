@@ -72,9 +72,6 @@ interface Particle {
   angle: number;
   radius: number;
   spiraling: boolean;
-  // target position on orb surface (for sleep)
-  targetPos: THREE.Vector3;
-  startPos: THREE.Vector3;
 }
 
 function Orb({ phase }: { phase: WakePhase }) {
@@ -116,40 +113,23 @@ function Orb({ phase }: { phase: WakePhase }) {
         angle: 0,
         radius: 0,
         spiraling: false,
-        targetPos: new THREE.Vector3(),
-        startPos: new THREE.Vector3(),
       });
     }
     particles.current = arr;
   };
 
-  // Particles start scattered and spiral inward, then FORM the orb shape
   const triggerSuck = () => {
     const arr: Particle[] = [];
     for (let i = 0; i < POOL; i++) {
       const angle = Math.random() * Math.PI * 2;
       const radius = 1.5 + Math.random() * 3.5;
-      const startPos = new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, (Math.random() - 0.5) * 2);
-
-      // Target: point on orb surface sphere
-      const phi = Math.acos(2 * Math.random() - 1);
-      const theta = Math.random() * Math.PI * 2;
-      const orbR = 0.12;
-      const targetPos = new THREE.Vector3(
-        orbR * Math.sin(phi) * Math.cos(theta),
-        orbR * Math.sin(phi) * Math.sin(theta),
-        orbR * Math.cos(phi),
-      );
-
       arr.push({
-        pos: startPos.clone(),
+        pos: new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, (Math.random() - 0.5) * 2),
         vel: new THREE.Vector3(0, 0, 0),
         life: 1,
         angle,
         radius,
         spiraling: true,
-        targetPos,
-        startPos: startPos.clone(),
       });
     }
     particles.current = arr;
@@ -189,7 +169,6 @@ function Orb({ phase }: { phase: WakePhase }) {
       }
     }
 
-    // Sleep: hide orb mesh, particles form the orb shape
     if (p === "sleeping-out") {
       showOrb = false;
       opacityMul = 0;
@@ -218,7 +197,6 @@ function Orb({ phase }: { phase: WakePhase }) {
       m.opacity = opacityMul * Math.min(1.5, intensityMul);
     }
 
-    // Particles
     let anyAlive = false;
     if (particles.current.length > 0) {
       for (let i = 0; i < POOL; i++) {
@@ -226,37 +204,16 @@ function Orb({ phase }: { phase: WakePhase }) {
         if (!part) continue;
 
         if (part.spiraling) {
-          // Phase 1 (0-1.4s): spiral inward
-          // Phase 2 (1.4-2.8s): particles on orb surface, slowly orbiting
-          const SPIRAL_PHASE = 1.4;
-          const ORB_PHASE = 2.8;
-
-          if (phaseAge < SPIRAL_PHASE) {
-            // Spiral inward with rotation
-            const progress = phaseAge / SPIRAL_PHASE;
+          const SPIRAL_DURATION = 2.2;
+          if (phaseAge < SPIRAL_DURATION) {
+            const progress = phaseAge / SPIRAL_DURATION;
             const eased = progress * progress;
             part.angle += dt * (1.5 + eased * 10);
             part.radius *= 1 - dt * (0.3 + eased * 1.8);
             part.pos.x = Math.cos(part.angle) * part.radius;
             part.pos.y = Math.sin(part.angle) * part.radius * 0.6;
             part.pos.z *= 1 - dt * 2;
-            part.life = 1;
-          } else if (phaseAge < ORB_PHASE) {
-            // Particles arrive at orb surface — lerp to target
-            const progress = (phaseAge - SPIRAL_PHASE) / (ORB_PHASE - SPIRAL_PHASE);
-            const eased = 1 - Math.pow(1 - progress, 3);
-            part.pos.lerpVectors(
-              new THREE.Vector3(
-                Math.cos(part.angle) * Math.max(part.radius, 0.01),
-                Math.sin(part.angle) * Math.max(part.radius, 0.01) * 0.6,
-                part.pos.z,
-              ),
-              part.targetPos,
-              eased * dt * 3,
-            );
-            // Slow orbit on surface
-            part.angle += dt * 0.5;
-            part.life = 1;
+            part.life = part.radius > 0.02 ? 1 : 0;
           } else {
             part.life = 0;
           }

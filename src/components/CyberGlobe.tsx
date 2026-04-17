@@ -132,7 +132,7 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineGeomRef = useRef<THREE.BufferGeometry>(null);
-  const mountTimeRef = useRef<number>(performance.now() / 1000 - 0.8);
+  const mountTimeRef = useRef<number>(performance.now() / 1000 - 1.5);
   const dissolveStartRef = useRef<number | null>(null);
 
   const NODE_COUNT = 560;
