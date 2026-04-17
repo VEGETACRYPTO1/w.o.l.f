@@ -134,12 +134,22 @@ interface Pulse {
 
 let pulseId = 0;
 
-function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; dissolving?: boolean }) {
+function BrainNetwork({ colors, dissolving = false, phase }: { colors: ModeColorSet; dissolving?: boolean; phase: WakePhase }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineGeomRef = useRef<THREE.BufferGeometry>(null);
   const mountTimeRef = useRef<number>(performance.now() / 1000);
+  const wakingStartRef = useRef<number | null>(phase === "waking" ? performance.now() / 1000 : null);
   const dissolveStartRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (phase === "waking" && wakingStartRef.current === null) {
+      wakingStartRef.current = performance.now() / 1000;
+    }
+    if (phase === "awake") {
+      wakingStartRef.current = null;
+    }
+  }, [phase]);
 
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
@@ -323,12 +333,24 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
-    // Forming animation (mount → 1.0s ease-in)
-    const sinceMount = (performance.now() / 1000) - mountTimeRef.current;
-    const formProgress = Math.min(1, sinceMount / 1.0);
-    const formEase = 1 - Math.pow(1 - formProgress, 3);
+    // Forming animation — driven by wake phase if active, else mount timer
+    const wakingAge = wakingStartRef.current !== null ? (performance.now() / 1000) - wakingStartRef.current : -1;
+    // Brain starts emerging from the orb at ~1.0s (right when orb bursts)
+    let formEase = 1;
+    if (phase === "waking" && wakingAge >= 0) {
+      const rel = (wakingAge - 0.95) / 1.4; // emerge over 1.4s starting at burst
+      const k = Math.max(0, Math.min(1, rel));
+      formEase = 1 - Math.pow(1 - k, 3);
+    } else if (phase === "sleeping" || phase === "sleeping-out") {
+      // hidden when fully asleep
+      formEase = phase === "sleeping" ? 0 : 1;
+    } else {
+      const sinceMount = (performance.now() / 1000) - mountTimeRef.current;
+      const formProgress = Math.min(1, sinceMount / 1.0);
+      formEase = 1 - Math.pow(1 - formProgress, 3);
+    }
 
-    // Dissolving (black hole) animation
+    // Dissolving (black hole) animation — stronger spiral collapse
     if (dissolving && dissolveStartRef.current === null) {
       dissolveStartRef.current = performance.now() / 1000;
     }
@@ -336,7 +358,7 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
       dissolveStartRef.current = null;
     }
     const dissolveAge = dissolveStartRef.current !== null ? (performance.now() / 1000) - dissolveStartRef.current : -1;
-    const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 2.1) : 0;
+    const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 2.4) : 0;
     const dissolveEase = dissolveProgress * dissolveProgress;
 
     highlightColor.lerp(targetHighlight.current, 0.04);
@@ -347,12 +369,14 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     // Smooth single-flow breathing — bigger amplitude
     const breath = 1 + Math.sin(t * 0.7) * 0.22 + audio * 0.08;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.08;
-      groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08 + dissolveEase * 0.18;
+      // Accelerated rotation during dissolve
+      groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.35;
+      groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08 + dissolveEase * 0.45;
+      groupRef.current.rotation.z = dissolveEase * 0.6;
       const formScale = formEase;
-      const dissolveScale = 1 - dissolveEase * 0.92;
-      groupRef.current.scale.setScalar(Math.max(0.02, breath * formScale * dissolveScale));
-      groupRef.current.position.z = dissolveEase * 1.1;
+      const dissolveScale = 1 - dissolveEase * 0.96;
+      groupRef.current.scale.setScalar(Math.max(0.005, breath * formScale * dissolveScale));
+      groupRef.current.position.z = dissolveEase * 1.4;
     }
 
     // Wave propagation from chat events
@@ -935,14 +959,15 @@ function ParallaxCamera() {
 
 function Scene({ colors, dissolving, phase }: { colors: ModeColorSet; dissolving?: boolean; phase: WakePhase }) {
   const showBackground = phase === "awake";
+  const showStars = phase === "awake"; // hide stars during transitions so collapse reads clearly
 
   return (
     <>
       {showBackground && <color attach="background" args={["#050507"]} />}
       <BloomEffect />
       <ParallaxCamera />
-      <BrainNetwork colors={colors} dissolving={dissolving} />
-      <BackgroundStars />
+      <BrainNetwork colors={colors} dissolving={dissolving} phase={phase} />
+      {showStars && <BackgroundStars />}
     </>
   );
 }
@@ -950,9 +975,11 @@ function Scene({ colors, dissolving, phase }: { colors: ModeColorSet; dissolving
 export function CyberGlobe({ phase, dissolving = false }: { phase: WakePhase; dissolving?: boolean }) {
   const { mode } = useMode();
   const colors = modeColors[mode] || modeColors.intelligence;
+  // Tag the whole brain canvas as a black-hole target so the visible scene gets pulled too
+  const bhAttr = phase === "sleeping-out" ? { "data-bh": "" } : {};
 
   return (
-    <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
+    <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }} {...bhAttr}>
       <Canvas
         camera={{ position: [0, 0, 5.5], fov: 70 }}
         gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
