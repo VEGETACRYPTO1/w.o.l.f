@@ -23,6 +23,17 @@ export function getSpeakingIntensity() {
   return _speakingIntensity;
 }
 
+// Mode burst channel (carries color payload)
+type BurstCb = (color: string) => void;
+const burstListeners: Set<BurstCb> = new Set();
+export function onModeBurst(cb: BurstCb) {
+  burstListeners.add(cb);
+  return () => burstListeners.delete(cb);
+}
+export function emitModeBurst(color: string) {
+  burstListeners.forEach((fn) => fn(color));
+}
+
 export function setSpeakingActive(active: boolean) {
   if (active) {
     _speakingIntensity = 1;

@@ -6,7 +6,7 @@ import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { onBrainEvent, getSpeakingIntensity } from "@/lib/brainEvents";
+import { onBrainEvent, getSpeakingIntensity, onModeBurst } from "@/lib/brainEvents";
 
 const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
   intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
@@ -212,6 +212,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const waveOrigin = useRef<THREE.Vector3 | null>(null);
   const waveStart = useRef(0);
 
+  // Mode burst: radial shockwave from center
+  const burstStart = useRef(0);
+  const burstActive = useRef(false);
+  const burstColor = useRef(new THREE.Color("#FFD36B"));
+  const BURST_DURATION = 1.4;
+  const BURST_MAX_RADIUS = 3.2;
+  const BURST_BAND = 0.45;
+
   const handleHover = useCallback((local: THREE.Vector3 | null) => {
     hoverPoint.current = local;
   }, []);
@@ -240,6 +248,40 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     });
     return () => { off(); };
   }, [nodes, edgesByNode]);
+
+  // Subscribe to mode burst — radial shockwave from center
+  useEffect(() => {
+    const off = onModeBurst((color) => {
+      burstColor.current.set(color);
+      burstStart.current = performance.now() / 1000;
+      burstActive.current = true;
+      // Spawn pulses from the most-central nodes outward
+      const centerNodes = nodes
+        .map((n, i) => ({ i, d: n.length() }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, 10);
+      const burst: Pulse[] = [];
+      for (const { i: idx } of centerNodes) {
+        const adj = edgesByNode[idx];
+        for (let k = 0; k < Math.min(adj.length, 3); k++) {
+          const edgeIdx = adj[k];
+          const [ei, ej] = edges[edgeIdx];
+          const toNode = ei === idx ? ej : ei;
+          // Pick the outward-facing direction
+          burst.push({
+            id: pulseId++,
+            edgeIdx,
+            progress: 0,
+            speed: 0.025 + Math.random() * 0.02,
+            toNode,
+            generation: 0,
+          });
+        }
+      }
+      setPulses((prev) => [...prev, ...burst]);
+    });
+    return () => { off(); };
+  }, [nodes, edges, edgesByNode]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
@@ -292,6 +334,31 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const waveAge = waveOrigin.current ? t - waveStart.current : -1;
     const waveRadius = waveAge >= 0 ? waveAge * 3.5 : -1;
     const waveActive = waveAge >= 0 && waveAge < 1.6;
+
+    // Mode burst: radial shockwave from center
+    const burstAge = burstActive.current ? t - burstStart.current : -1;
+    const burstProgress = burstAge >= 0 ? burstAge / BURST_DURATION : -1;
+    const burstOn = burstActive.current && burstProgress >= 0 && burstProgress < 1;
+    const burstRadius = burstOn ? burstProgress * BURST_MAX_RADIUS : -1;
+    if (burstActive.current && burstProgress >= 1) burstActive.current = false;
+
+    // Bump edges within wavefront band
+    if (burstOn) {
+      const fade = 1 - burstProgress;
+      for (let e = 0; e < edges.length; e++) {
+        const [i, j] = edges[e];
+        const mx = (nodes[i].x + nodes[j].x) * 0.5;
+        const my = (nodes[i].y + nodes[j].y) * 0.5;
+        const mz = (nodes[i].z + nodes[j].z) * 0.5;
+        const d = Math.sqrt(mx * mx + my * my + mz * mz);
+        const ring = Math.abs(d - burstRadius);
+        if (ring < BURST_BAND) {
+          const k = (1 - ring / BURST_BAND) * fade;
+          if (edgeGlow[e] < k) edgeGlow[e] = k;
+        }
+      }
+    }
+
 
     // White flash on a random node every so often
     if (t > nextFlash.current) {
@@ -366,9 +433,11 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
     const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
     const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
-    const hiR = highlightColor.r;
-    const hiG = highlightColor.g;
-    const hiB = highlightColor.b;
+    // Highlight color tint: blend toward burst color while burst is active
+    const tintAmt = burstOn ? Math.sin(burstProgress * Math.PI) : 0;
+    const hiR = highlightColor.r + (burstColor.current.r - highlightColor.r) * tintAmt;
+    const hiG = highlightColor.g + (burstColor.current.g - highlightColor.g) * tintAmt;
+    const hiB = highlightColor.b + (burstColor.current.b - highlightColor.b) * tintAmt;
     if (lineGeomRef.current) {
       const colorAttr = lineGeomRef.current.getAttribute("color") as THREE.BufferAttribute | undefined;
       if (colorAttr) {
