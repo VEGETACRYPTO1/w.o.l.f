@@ -211,7 +211,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
   // Subscribe to brain wave events from chat
   useEffect(() => {
-    return onBrainEvent("wave", () => {
+    const off = onBrainEvent("wave", () => {
       const idx = Math.floor(Math.random() * nodes.length);
       waveOrigin.current = nodes[idx].clone();
       waveStart.current = performance.now() / 1000;
@@ -227,6 +227,7 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       }
       setPulses((prev) => [...prev, ...burst]);
     });
+    return () => { off(); };
   }, [nodes, edgesByNode]);
 
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
