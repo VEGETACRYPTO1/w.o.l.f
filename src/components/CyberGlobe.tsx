@@ -361,9 +361,33 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    if (lineMatRef.current) {
-      lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
-      lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
+    // Decay all edge glows + write vertex colors
+    const dt = Math.min(0.05, clock.getDelta?.() ?? 1 / 60);
+    // Note: getDelta is on the clock; use its native API safely
+    const decay = Math.exp(-TRAIL_DECAY * (1 / 60));
+    const baseR = shadowColor.r * 0.6 + midColor.r * 0.2;
+    const baseG = shadowColor.g * 0.6 + midColor.g * 0.2;
+    const baseB = shadowColor.b * 0.6 + midColor.b * 0.2;
+    const hiR = highlightColor.r;
+    const hiG = highlightColor.g;
+    const hiB = highlightColor.b;
+    if (lineGeomRef.current) {
+      const colorAttr = lineGeomRef.current.getAttribute("color") as THREE.BufferAttribute | undefined;
+      if (colorAttr) {
+        const arr = colorAttr.array as Float32Array;
+        for (let e = 0; e < edges.length; e++) {
+          edgeGlow[e] *= decay;
+          const g = edgeGlow[e];
+          // Lift base brightness slightly with heartbeat
+          const ambient = 0.55 + beat * 0.25;
+          const r = baseR * ambient + (hiR - baseR * ambient) * g;
+          const gg = baseG * ambient + (hiG - baseG * ambient) * g;
+          const b = baseB * ambient + (hiB - baseB * ambient) * g;
+          arr[e * 6 + 0] = r; arr[e * 6 + 1] = gg; arr[e * 6 + 2] = b;
+          arr[e * 6 + 3] = r; arr[e * 6 + 4] = gg; arr[e * 6 + 5] = b;
+        }
+        colorAttr.needsUpdate = true;
+      }
     }
 
     // Spawn pulses (denser ambient firing, more during speech)
