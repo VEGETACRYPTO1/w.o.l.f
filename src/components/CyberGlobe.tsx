@@ -17,7 +17,6 @@ const modeColors: Record<string, { highlight: string; mid: string; shadow: strin
 
 type ModeColorSet = { highlight: string; mid: string; shadow: string };
 
-// Reset hook (kept for compatibility with any external callers)
 const resetListeners: Set<() => void> = new Set();
 export function resetSphere() {
   resetListeners.forEach((fn) => fn());
@@ -33,7 +32,7 @@ function BloomEffect() {
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(size.width, size.height),
-      1.1, 0.5, 0.1
+      1.2, 0.55, 0.08
     );
     composer.addPass(bloom);
     composerRef.current = composer;
@@ -45,41 +44,82 @@ function BloomEffect() {
 }
 
 // ── Brain-shaped node distribution ──
-// Two hemispheres (left/right), ellipsoidal, with a slight central fissure.
 function generateBrainNodes(count: number) {
   const nodes: THREE.Vector3[] = [];
-  // Brain ellipsoid radii
-  const a = 2.2; // x (width)
-  const b = 1.6; // y (height)
-  const c = 1.9; // z (depth)
-  const fissure = 0.18; // central gap along x
+  const a = 2.2, b = 1.6, c = 1.9;
+  const fissure = 0.18;
 
   while (nodes.length < count) {
-    // Sample inside ellipsoid surface band
     const u = Math.random() * Math.PI * 2;
     const v = Math.acos(2 * Math.random() - 1);
-    // Surface + slight inward jitter for organic depth
     const r = 0.85 + Math.random() * 0.18;
     let x = a * r * Math.sin(v) * Math.cos(u);
     const y = b * r * Math.sin(v) * Math.sin(u);
     const z = c * r * Math.cos(v);
 
-    // Push hemispheres apart along x to create the central fissure
     if (Math.abs(x) < fissure) continue;
     x += Math.sign(x) * 0.05;
 
-    // Add bumpy "gyri" using noise-like sin perturbation
     const bump =
       0.08 * Math.sin(4 * u + 3 * v) +
       0.05 * Math.sin(7 * v - 2 * u);
     const len = Math.sqrt(x * x + y * y + z * z);
-    const nx = x + (x / len) * bump;
-    const ny = y + (y / len) * bump;
-    const nz = z + (z / len) * bump;
-
-    nodes.push(new THREE.Vector3(nx, ny, nz));
+    nodes.push(new THREE.Vector3(
+      x + (x / len) * bump,
+      y + (y / len) * bump,
+      z + (z / len) * bump,
+    ));
   }
   return nodes;
+}
+
+// ── Cursor → 3D ray hit on brain bounding ellipsoid ──
+function CursorTracker({ onMove }: { onMove: (localPoint: THREE.Vector3 | null) => void }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const mouse = useRef(new THREE.Vector2());
+  const { camera, gl } = useThree();
+
+  useEffect(() => {
+    const update = (cx: number, cy: number) => {
+      const rect = gl.domElement.getBoundingClientRect();
+      mouse.current.x = ((cx - rect.left) / rect.width) * 2 - 1;
+      mouse.current.y = -((cy - rect.top) / rect.height) * 2 + 1;
+    };
+    const onMouse = (e: MouseEvent) => update(e.clientX, e.clientY);
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (t) update(t.clientX, t.clientY);
+    };
+    window.addEventListener("mousemove", onMouse);
+    window.addEventListener("touchmove", onTouch, { passive: true });
+    window.addEventListener("touchstart", onTouch, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onMouse);
+      window.removeEventListener("touchmove", onTouch);
+      window.removeEventListener("touchstart", onTouch);
+    };
+  }, [gl]);
+
+  useFrame(() => {
+    if (!meshRef.current) return;
+    raycaster.setFromCamera(mouse.current, camera);
+    const hits = raycaster.intersectObject(meshRef.current, false);
+    if (hits.length > 0) {
+      // Convert world hit point into the brain group's local space
+      const local = meshRef.current.worldToLocal(hits[0].point.clone());
+      onMove(local);
+    } else {
+      onMove(null);
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} visible={false} scale={[2.4, 1.8, 2.1]}>
+      <sphereGeometry args={[1, 24, 24]} />
+      <meshBasicMaterial visible={false} />
+    </mesh>
+  );
 }
 
 // ── Brain Neural Network ──
@@ -96,22 +136,19 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
   const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
-  const pulseGroupRef = useRef<THREE.Group>(null);
 
-  const NODE_COUNT = 280;
-  const MAX_EDGES_PER_NODE = 4;
-  const NEIGHBOR_DIST = 0.55;
-  const MAX_PULSES = 40;
+  const NODE_COUNT = 560;
+  const MAX_EDGES_PER_NODE = 6;
+  const NEIGHBOR_DIST = 0.48;
+  const MAX_PULSES = 90;
+  const HOVER_RADIUS = 0.9;
 
-  // Generate brain nodes once
-  const { nodes, edges, edgePositions, firingPhases } = useMemo(() => {
+  const { nodes, edges, edgePositions, firingPhases, edgesByNode } = useMemo(() => {
     const nodes = generateBrainNodes(NODE_COUNT);
 
-    // Build edges: connect each node to nearest few neighbors within radius
     const edges: [number, number][] = [];
     const edgeSet = new Set<string>();
     for (let i = 0; i < nodes.length; i++) {
-      // Find candidate neighbors
       const candidates: { j: number; d: number }[] = [];
       for (let j = 0; j < nodes.length; j++) {
         if (i === j) continue;
@@ -130,7 +167,6 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       }
     }
 
-    // Build flat positions array for line segments
     const edgePositions = new Float32Array(edges.length * 2 * 3);
     for (let e = 0; e < edges.length; e++) {
       const [i, j] = edges[e];
@@ -143,21 +179,37 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       edgePositions[e * 6 + 5] = b.z;
     }
 
-    // Per-node firing phase offset (random)
+    // Adjacency: for each node → list of edge indices
+    const edgesByNode: number[][] = nodes.map(() => []);
+    for (let e = 0; e < edges.length; e++) {
+      edgesByNode[edges[e][0]].push(e);
+      edgesByNode[edges[e][1]].push(e);
+    }
+
     const firingPhases = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) firingPhases[i] = Math.random() * Math.PI * 2;
 
-    return { nodes, edges, edgePositions, firingPhases };
+    return { nodes, edges, edgePositions, firingPhases, edgesByNode };
   }, []);
 
-  // Pulses traveling along edges
   const [pulses, setPulses] = useState<Pulse[]>([]);
   const nextSpawn = useRef(0);
+  const nextFlash = useRef(0);
+  const flashIndex = useRef<number>(-1);
+  const flashUntil = useRef<number>(0);
 
-  // Color objects
+  // Hover state in local brain space
+  const hoverPoint = useRef<THREE.Vector3 | null>(null);
+  const lastBurst = useRef(0);
+
+  const handleHover = useCallback((local: THREE.Vector3 | null) => {
+    hoverPoint.current = local;
+  }, []);
+
   const highlightColor = useMemo(() => new THREE.Color(colors.highlight), []);
   const midColor = useMemo(() => new THREE.Color(colors.mid), []);
   const shadowColor = useMemo(() => new THREE.Color(colors.shadow), []);
+  const whiteColor = useMemo(() => new THREE.Color("#ffffff"), []);
   const targetHighlight = useRef(new THREE.Color(colors.highlight));
   const targetMid = useRef(new THREE.Color(colors.mid));
   const targetShadow = useRef(new THREE.Color(colors.shadow));
@@ -168,7 +220,6 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     targetShadow.current.set(colors.shadow);
   }, [colors.highlight, colors.mid, colors.shadow]);
 
-  // Set up instanced node mesh transforms once
   useEffect(() => {
     if (!nodeMeshRef.current) return;
     const dummy = new THREE.Object3D();
@@ -189,12 +240,10 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
-    // Lerp colors smoothly toward target
     highlightColor.lerp(targetHighlight.current, 0.04);
     midColor.lerp(targetMid.current, 0.04);
     shadowColor.lerp(targetShadow.current, 0.04);
 
-    // Breathing scale
     const breath = 1 + Math.sin(t * 0.7) * 0.04;
     if (groupRef.current) {
       groupRef.current.rotation.y += 0.0012;
@@ -202,50 +251,100 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
       groupRef.current.scale.setScalar(breath);
     }
 
-    // Update node firing (pulse + brightness)
+    // White flash on a random node every so often
+    if (t > nextFlash.current) {
+      flashIndex.current = Math.floor(Math.random() * nodes.length);
+      flashUntil.current = t + 0.25;
+      nextFlash.current = t + 0.6 + Math.random() * 1.4;
+    }
+    const flashing = t < flashUntil.current ? flashIndex.current : -1;
+    const flashStrength = flashing >= 0 ? Math.max(0, 1 - (t - (flashUntil.current - 0.25)) / 0.25) : 0;
+
+    const hover = hoverPoint.current;
+
+    // Update node firing
     if (nodeMeshRef.current) {
       for (let i = 0; i < nodes.length; i++) {
         const phase = firingPhases[i];
-        // Random firing — sharp peaks
-        const fire = Math.pow(Math.max(0, Math.sin(t * 1.2 + phase)), 8);
-        const baseScale = 0.012;
-        const scale = baseScale + fire * 0.045;
+        let fire = Math.pow(Math.max(0, Math.sin(t * 1.2 + phase)), 8);
+
+        // Hover proximity boost
+        let proximity = 0;
+        if (hover) {
+          const d = nodes[i].distanceTo(hover);
+          if (d < HOVER_RADIUS) {
+            proximity = 1 - d / HOVER_RADIUS;
+            fire = Math.min(1, fire + proximity * 0.9);
+          }
+        }
+
+        const baseScale = 0.011;
+        let scale = baseScale + fire * 0.05 + proximity * 0.025;
+
+        // Color: idle = mid, firing = highlight, hover boost too
+        tmpColor.copy(midColor).lerp(highlightColor, fire);
+
+        if (i === flashing) {
+          tmpColor.lerp(whiteColor, flashStrength);
+          scale += flashStrength * 0.08;
+        }
+
         dummy.position.copy(nodes[i]);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         nodeMeshRef.current.setMatrixAt(i, dummy.matrix);
-
-        // Color: idle = mid, firing = highlight
-        tmpColor.copy(midColor).lerp(highlightColor, fire);
         nodeMeshRef.current.setColorAt(i, tmpColor);
       }
       nodeMeshRef.current.instanceMatrix.needsUpdate = true;
       if (nodeMeshRef.current.instanceColor) nodeMeshRef.current.instanceColor.needsUpdate = true;
     }
 
-    // Edge color breathes subtly
     if (lineMatRef.current) {
       lineMatRef.current.color.copy(shadowColor).lerp(midColor, 0.4);
-      lineMatRef.current.opacity = 0.18 + Math.sin(t * 0.9) * 0.05;
+      lineMatRef.current.opacity = 0.16 + Math.sin(t * 0.9) * 0.04;
     }
 
-    // Spawn new pulses
+    // Spawn pulses (denser ambient firing)
     if (t > nextSpawn.current && pulses.length < MAX_PULSES) {
       const newPulses: Pulse[] = [];
-      const spawnCount = 1 + Math.floor(Math.random() * 3);
+      const spawnCount = 2 + Math.floor(Math.random() * 4);
       for (let k = 0; k < spawnCount; k++) {
         newPulses.push({
           id: pulseId++,
           edgeIdx: Math.floor(Math.random() * edges.length),
           progress: 0,
-          speed: 0.012 + Math.random() * 0.018,
+          speed: 0.012 + Math.random() * 0.02,
         });
       }
       setPulses((prev) => [...prev, ...newPulses]);
-      nextSpawn.current = t + 0.08 + Math.random() * 0.25;
+      nextSpawn.current = t + 0.05 + Math.random() * 0.18;
     }
 
-    // Advance pulses
+    // Hover burst — find nearest node, fire pulses along its edges
+    if (hover && t - lastBurst.current > 0.18 && pulses.length < MAX_PULSES) {
+      let nearestIdx = -1;
+      let nearestD = HOVER_RADIUS;
+      for (let i = 0; i < nodes.length; i++) {
+        const d = nodes[i].distanceTo(hover);
+        if (d < nearestD) { nearestD = d; nearestIdx = i; }
+      }
+      if (nearestIdx >= 0) {
+        const adj = edgesByNode[nearestIdx];
+        const burst: Pulse[] = [];
+        const burstSize = Math.min(adj.length, 6);
+        for (let k = 0; k < burstSize; k++) {
+          burst.push({
+            id: pulseId++,
+            edgeIdx: adj[k],
+            progress: 0,
+            speed: 0.025 + Math.random() * 0.02,
+          });
+        }
+        setPulses((prev) => [...prev, ...burst]);
+        lastBurst.current = t;
+      }
+    }
+
     setPulses((prev) =>
       prev
         .map((p) => ({ ...p, progress: p.progress + p.speed }))
@@ -255,7 +354,6 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
 
   return (
     <group ref={groupRef}>
-      {/* Synaptic connections */}
       <lineSegments>
         <bufferGeometry>
           <bufferAttribute
@@ -269,13 +367,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           ref={lineMatRef}
           color={colors.mid}
           transparent
-          opacity={0.2}
+          opacity={0.18}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
       </lineSegments>
 
-      {/* Neuron nodes (instanced) */}
       <instancedMesh
         ref={nodeMeshRef}
         args={[undefined, undefined, NODE_COUNT]}
@@ -290,31 +387,30 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         />
       </instancedMesh>
 
-      {/* Electric pulses traveling along edges */}
-      <group ref={pulseGroupRef}>
-        {pulses.map((p) => {
-          const [i, j] = edges[p.edgeIdx];
-          const a = nodes[i];
-          const b = nodes[j];
-          const x = a.x + (b.x - a.x) * p.progress;
-          const y = a.y + (b.y - a.y) * p.progress;
-          const z = a.z + (b.z - a.z) * p.progress;
-          const intensity = Math.sin(p.progress * Math.PI);
-          return (
-            <mesh key={p.id} position={[x, y, z]}>
-              <sphereGeometry args={[0.03, 8, 8]} />
-              <meshBasicMaterial
-                color={colors.highlight}
-                transparent
-                opacity={intensity}
-                blending={THREE.AdditiveBlending}
-                depthWrite={false}
-                toneMapped={false}
-              />
-            </mesh>
-          );
-        })}
-      </group>
+      {pulses.map((p) => {
+        const [i, j] = edges[p.edgeIdx];
+        const a = nodes[i];
+        const b = nodes[j];
+        const x = a.x + (b.x - a.x) * p.progress;
+        const y = a.y + (b.y - a.y) * p.progress;
+        const z = a.z + (b.z - a.z) * p.progress;
+        const intensity = Math.sin(p.progress * Math.PI);
+        return (
+          <mesh key={p.id} position={[x, y, z]}>
+            <sphereGeometry args={[0.028, 8, 8]} />
+            <meshBasicMaterial
+              color={colors.highlight}
+              transparent
+              opacity={intensity}
+              blending={THREE.AdditiveBlending}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
+        );
+      })}
+
+      <CursorTracker onMove={handleHover} />
     </group>
   );
 }
@@ -344,7 +440,6 @@ function BackgroundStars() {
   );
 }
 
-// ── Scene ──
 function Scene({ colors }: { colors: ModeColorSet }) {
   return (
     <>
