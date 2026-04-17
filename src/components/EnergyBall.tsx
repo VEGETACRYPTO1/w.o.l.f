@@ -169,9 +169,14 @@ function Orb({ phase }: { phase: WakePhase }) {
       }
     }
 
+    // FIX: orb fades IN as spiral completes — no pop, no gap
     if (p === "sleeping-out") {
-      showOrb = false;
-      opacityMul = 0;
+      const progress = Math.min(1, phaseAge / 2.2);
+      showOrb = true;
+      sizeMul = Math.max(0, (progress - 0.7) / 0.3);
+      opacityMul = Math.max(0, (progress - 0.7) / 0.3);
+      intensityMul = 1 + progress * 2;
+      rotSpeed = 0.3 + progress * 3;
     }
 
     const shake = p === "waking" && phaseAge < 1.0 ? (Math.random() - 0.5) * 0.06 * Math.pow(phaseAge / 1.0, 2) : 0;
