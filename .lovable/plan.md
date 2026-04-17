@@ -1,46 +1,57 @@
 
-Goal: polish the existing sleep/wake system so it feels premium and cinematic: cleaner orb, smoother wake burst, and a real visible black-hole pull on sleep.
+Goal: make wake feel like the brain emerges from the orb, and make sleep show a real visible black-hole pull instead of a snap-to-black.
 
-1. Orb cleanup in `src/components/EnergyBall.tsx`
-- Remove the visible “highlight” look by replacing the current larger glow mesh with a much tighter additive light bloom only.
-- Keep the small faceted core, but make the surrounding light read as brightness, not a second shape.
-- Preserve the sparse starfield behind it so the orb sits in space, not on a fake backdrop.
+What’s actually broken now
+- The orb layer uses a full black background even during `sleeping-out`, so it visually covers the app while the suction is supposed to happen.
+- The brain only renders in `awake`, not during `waking`, so it cannot visibly form out of the burst.
+- The current black-hole effect is split between wrapper tinting, a full-screen `data-bh` globe layer, and a short timeout, so the pull reads weakly.
 
-2. Make wake feel smoother and more cinematic
-- Rework the wake timing so it becomes: charge-up → subtle shake ramp for about 1 second → tight bright bloom → tiny fast particle burst → crossfade into brain/UI.
-- Reduce the feeling of a hard snap by overlapping the orb fade-out with the brain/forming fade-in.
-- Keep the particles small and fast so the burst feels sharp, not cartoonish.
+Plan
 
-3. Fix why the black-hole sleep effect currently feels broken
-- The current effect is being dominated by the whole wrapper collapsing, so the individual suction on HUD elements is barely readable.
-- Replace the generic wrapper shrink-first approach with staged element suction:
-  - chat button/panel
-  - W.O.L.F title
-  - time/date
-  - globe/root scene
-- Each marked element should visibly translate to center, spin harder over time, shrink, blur, and brighten as it gets pulled in.
+1. Re-orchestrate wake in `src/App.tsx`
+- Render the app during `waking` as well, behind the orb.
+- Add a staged overlap:
+  - orb charges/shakes/bursts
+  - brain starts forming from center before orb fully disappears
+  - UI fades in slightly after the brain begins forming
+- This will make the brain feel like it comes out of the orb instead of appearing after it.
 
-4. Rebuild the sleep transition around the orb
-- Keep the orb centered and visible as the destination core during sleep-out.
-- Make the brain collapse inward more aggressively at the same time the HUD gets sucked in.
-- End with the orb re-forming cleanly in the center once everything has converged.
+2. Fix the orb overlay in `src/components/EnergyBall.tsx`
+- Keep the sleep screen black only in stable `sleeping`.
+- Make the orb scene background transparent during `waking` and `sleeping-out` so the brain/UI remains visible behind it.
+- Keep the orb small and bright, with no visible extra shape around it.
 
-5. Tighten the implementation details
-- `src/App.tsx`
-  - adjust `WakeGate` orchestration so the app stays on screen long enough for the suction to be seen
-  - remove or soften the wrapper-level animation that is hiding the black-hole effect
-  - keep the orb layered above the collapsing app during sleep-out
-- `src/index.css`
-  - rewrite the black-hole keyframes to prioritize visible inward travel and spin, not just fade/shrink
-  - add a separate stronger center-collapse animation for the full-screen scene if needed
+3. Rebuild sleep timing in `src/App.tsx` + `src/contexts/WakeContext.tsx`
+- Extend `sleeping-out` long enough for the suction to fully play.
+- Keep the app mounted until the pull completes, then switch to `sleeping`.
+- Keep the orb visible at center as the destination point during the whole collapse.
+
+4. Make the black-hole pull readable in `src/index.css`
+- Replace the current mostly fade/shrink feel with a stronger inward travel:
+  - larger center translation
+  - faster spin ramp near the end
+  - scale collapse later, not immediately
+  - brightness stretch + blur only in the final phase
+- Tone down wrapper-level dimming so it doesn’t hide the motion.
+
+5. Clean up what gets sucked in
+- `src/components/AppLayout.tsx`
+  - stop relying on one giant full-screen `data-bh` wrapper as the main visible effect
 - `src/components/CyberGlobe.tsx`
-  - strengthen the internal dissolve so the neural core clearly collapses into center during sleep
-  - keep the existing cleaner background/star settings
+  - handle the brain collapse internally so the neural core clearly spirals/compresses into center
+  - start the brain from a tighter center state during wake so it can “grow out” of the orb
 - `src/pages/Dashboard.tsx` and `src/components/ChatOverlay.tsx`
-  - verify all key HUD pieces are explicitly tagged for suction so the effect reads clearly
-- also fix the current ref warning tied to the transition flow while touching this logic, so the animation runs on real DOM wrappers only
+  - keep explicit suction targets for time/date, W.O.L.F title, chat button, chat panel
+  - ensure these remain individually visible while being pulled
 
-6. Result
-- Sleep screen: small clean orb with bright node-like light only, no ugly highlight shape.
-- Wake: smoother blend with a short cinematic shake and a sharper, smaller burst into the brain/UI.
-- Sleep: actual black-hole feel — the HUD and brain visibly spiral and get dragged into the center orb instead of just fading away.
+6. Refine the wake burst in `src/components/EnergyBall.tsx`
+- Smooth the burst into 3 phases:
+  - charge/compress
+  - 1s shake ramp
+  - tight bright burst with tiny fast particles
+- Crossfade the particle remnant with the brain forming animation so the transition blends instead of snapping.
+
+Expected result
+- Wake: orb charges, shakes, bursts, and the brain visibly grows out of that burst.
+- Sleep: HUD elements and the brain visibly spiral inward toward the center orb before the screen settles into the sleep state.
+- No more “snap into orb” look caused by the black full-screen orb layer.
