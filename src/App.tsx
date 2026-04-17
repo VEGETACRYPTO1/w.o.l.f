@@ -57,7 +57,7 @@ function WakeGate() {
           }
         >
           <BrowserRouter>
-            <AppLayout dissolving={sucking}>
+            <AppLayout phase={phase}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/goals" element={<Goals />} />

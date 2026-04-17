@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Points, PointMaterial } from "@react-three/drei";
 import * as THREE from "three";
 import { useMode } from "@/contexts/ModeContext";
+import type { WakePhase } from "@/contexts/WakeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
@@ -331,8 +332,11 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     if (dissolving && dissolveStartRef.current === null) {
       dissolveStartRef.current = performance.now() / 1000;
     }
+    if (!dissolving && dissolveStartRef.current !== null) {
+      dissolveStartRef.current = null;
+    }
     const dissolveAge = dissolveStartRef.current !== null ? (performance.now() / 1000) - dissolveStartRef.current : -1;
-    const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 1.0) : 0;
+    const dissolveProgress = dissolveAge >= 0 ? Math.min(1, dissolveAge / 2.1) : 0;
     const dissolveEase = dissolveProgress * dissolveProgress;
 
     highlightColor.lerp(targetHighlight.current, 0.04);
@@ -343,11 +347,12 @@ function BrainNetwork({ colors, dissolving = false }: { colors: ModeColorSet; di
     // Smooth single-flow breathing — bigger amplitude
     const breath = 1 + Math.sin(t * 0.7) * 0.22 + audio * 0.08;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.05;
-      groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
+      groupRef.current.rotation.y += 0.0012 + audio * 0.004 + dissolveEase * 0.08;
+      groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08 + dissolveEase * 0.18;
       const formScale = formEase;
-      const dissolveScale = 1 - dissolveEase;
-      groupRef.current.scale.setScalar(breath * formScale * dissolveScale);
+      const dissolveScale = 1 - dissolveEase * 0.92;
+      groupRef.current.scale.setScalar(Math.max(0.02, breath * formScale * dissolveScale));
+      groupRef.current.position.z = dissolveEase * 1.1;
     }
 
     // Wave propagation from chat events
@@ -928,10 +933,12 @@ function ParallaxCamera() {
   return null;
 }
 
-function Scene({ colors, dissolving }: { colors: ModeColorSet; dissolving?: boolean }) {
+function Scene({ colors, dissolving, phase }: { colors: ModeColorSet; dissolving?: boolean; phase: WakePhase }) {
+  const showBackground = phase === "awake";
+
   return (
     <>
-      <color attach="background" args={["#050507"]} />
+      {showBackground && <color attach="background" args={["#050507"]} />}
       <BloomEffect />
       <ParallaxCamera />
       <BrainNetwork colors={colors} dissolving={dissolving} />
@@ -940,18 +947,18 @@ function Scene({ colors, dissolving }: { colors: ModeColorSet; dissolving?: bool
   );
 }
 
-export function CyberGlobe({ dissolving = false }: { dissolving?: boolean }) {
+export function CyberGlobe({ phase, dissolving = false }: { phase: WakePhase; dissolving?: boolean }) {
   const { mode } = useMode();
   const colors = modeColors[mode] || modeColors.intelligence;
 
   return (
-    <div data-bh className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
+    <div className="fixed inset-0" style={{ zIndex: 0, filter: "contrast(1.1)" }}>
       <Canvas
         camera={{ position: [0, 0, 5.5], fov: 70 }}
-        gl={{ antialias: true, toneMapping: THREE.NoToneMapping }}
-        style={{ background: "#050507" }}
+        gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
+        style={{ background: phase === "awake" ? "#050507" : "transparent" }}
       >
-        <Scene colors={colors} dissolving={dissolving} />
+        <Scene colors={colors} phase={phase} dissolving={dissolving} />
       </Canvas>
     </div>
   );
