@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, X, User, Swords, Leaf, Brain } from "lucide-react";
 import { useMode, type Mode } from "@/contexts/ModeContext";
+import { useWake } from "@/contexts/WakeContext";
 import { streamWolfChat, type Msg } from "@/lib/wolfChat";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -15,11 +16,13 @@ export function ChatOverlay() {
   const [wolfPulse, setWolfPulse] = useState(false);
   const [energyBurst, setEnergyBurst] = useState(false);
   const { mode, setMode } = useMode();
+  const { phase } = useWake();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showModeSelector, setShowModeSelector] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const canInteract = phase === "awake";
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,7 +40,15 @@ export function ChatOverlay() {
     );
   }, []);
 
+  useEffect(() => {
+    if (phase !== "awake") {
+      setOpen(false);
+      setShowModeSelector(false);
+    }
+  }, [phase]);
+
   const toggleChat = () => {
+    if (!canInteract) return;
     setWolfPulse(true);
     setEnergyBurst(true);
     setTimeout(() => setWolfPulse(false), 400);
@@ -46,6 +57,7 @@ export function ChatOverlay() {
   };
 
   const handleWolfClick = () => {
+    if (!canInteract) return;
     setShowModeSelector((v) => !v);
     resetSphere();
   };
@@ -64,7 +76,7 @@ export function ChatOverlay() {
   };
 
   const send = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !canInteract) return;
     const userMsg: Msg = { role: "user", content: input.trim() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -137,14 +149,16 @@ export function ChatOverlay() {
         />
         <button
           onClick={toggleChat}
-          className="relative h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110"
+          disabled={!canInteract}
+          className="relative h-14 w-14 rounded-full flex items-center justify-center shadow-lg hover:scale-110 disabled:hover:scale-100"
           style={{
             background: "rgba(0,0,0,0.7)",
             border: "1px solid hsl(var(--primary) / 0.4)",
             boxShadow: open ? "0 0 25px hsl(var(--primary) / 0.5)" : "0 0 20px hsl(var(--primary) / 0.3)",
             backdropFilter: "blur(10px)",
-            transition: "transform 0.2s ease, box-shadow 0.3s ease",
+            transition: "transform 0.2s ease, box-shadow 0.3s ease, opacity 0.3s ease",
             animation: wolfPulse ? "wolfPulse 0.4s ease" : "none",
+            opacity: canInteract ? 1 : 0.7,
           }}
         >
           {open ? <X className="h-6 w-6 text-primary" /> : <span className="text-2xl">🐺</span>}
@@ -152,19 +166,19 @@ export function ChatOverlay() {
       </div>
 
       <div
-        data-bh
+        data-bh={open ? "" : undefined}
         className="fixed z-50"
         style={{
           bottom: "100px",
           right: "40px",
           width: "min(500px, calc(100vw - 80px))",
-          opacity: open ? 1 : 0,
-          transform: open ? "translateY(0px) scale(1)" : "translateY(40px) scale(0.85)",
-          filter: open ? "blur(0px)" : "blur(6px)",
+          opacity: open && canInteract ? 1 : 0,
+          transform: open && canInteract ? "translateY(0px) scale(1)" : "translateY(40px) scale(0.85)",
+          filter: open && canInteract ? "blur(0px)" : "blur(6px)",
           transformOrigin: "bottom right",
-          pointerEvents: open ? ("auto" as const) : ("none" as const),
+          pointerEvents: open && canInteract ? ("auto" as const) : ("none" as const),
           transition: "transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, filter 0.3s ease",
-          boxShadow: open
+          boxShadow: open && canInteract
             ? "0 0 20px hsl(var(--glow-primary) / 0.2), 0 0 60px hsl(var(--glow-primary) / 0.08)"
             : "none",
         }}
