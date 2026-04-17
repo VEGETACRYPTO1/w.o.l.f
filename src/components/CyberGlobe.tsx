@@ -6,7 +6,7 @@ import { useMode } from "@/contexts/ModeContext";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { onBrainEvent, getSpeakingIntensity } from "@/lib/brainEvents";
+import { onBrainEvent, getSpeakingIntensity, onModeBurst } from "@/lib/brainEvents";
 
 const modeColors: Record<string, { highlight: string; mid: string; shadow: string }> = {
   intelligence: { highlight: "#FFD36B", mid: "#C6A75E", shadow: "#8C6B2E" },
@@ -211,6 +211,14 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   // Chat wave: origin point + start time
   const waveOrigin = useRef<THREE.Vector3 | null>(null);
   const waveStart = useRef(0);
+
+  // Mode burst: radial shockwave from center
+  const burstStart = useRef(0);
+  const burstActive = useRef(false);
+  const burstColor = useRef(new THREE.Color("#FFD36B"));
+  const BURST_DURATION = 1.4;
+  const BURST_MAX_RADIUS = 3.2;
+  const BURST_BAND = 0.45;
 
   const handleHover = useCallback((local: THREE.Vector3 | null) => {
     hoverPoint.current = local;
