@@ -268,12 +268,19 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
     midColor.lerp(targetMid.current, 0.04);
     shadowColor.lerp(targetShadow.current, 0.04);
 
-    const breath = 1 + Math.sin(t * 0.7) * 0.04;
+    const audio = getSpeakingIntensity();
+    // Bigger breathing (15% amplitude) + audio-driven extra
+    const breath = 1 + Math.sin(t * 0.7) * 0.15 + audio * 0.08;
     if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0012;
+      groupRef.current.rotation.y += 0.0012 + audio * 0.004;
       groupRef.current.rotation.x = Math.sin(t * 0.15) * 0.08;
       groupRef.current.scale.setScalar(breath);
     }
+
+    // Wave propagation from chat events
+    const waveAge = waveOrigin.current ? t - waveStart.current : -1;
+    const waveRadius = waveAge >= 0 ? waveAge * 3.5 : -1;
+    const waveActive = waveAge >= 0 && waveAge < 1.6;
 
     // White flash on a random node every so often
     if (t > nextFlash.current) {
@@ -292,6 +299,12 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
         const phase = firingPhases[i];
         let fire = Math.pow(Math.max(0, Math.sin(t * 1.2 + phase)), 8);
 
+        // Audio-reactive boost
+        if (audio > 0) {
+          const audioFire = Math.pow(Math.max(0, Math.sin(t * 6 + phase * 2)), 4) * audio;
+          fire = Math.min(1, fire + audioFire * 0.7);
+        }
+
         // Hover proximity boost
         let proximity = 0;
         if (hover) {
@@ -302,16 +315,28 @@ function BrainNetwork({ colors }: { colors: ModeColorSet }) {
           }
         }
 
-        const baseScale = 0.011;
-        let scale = baseScale + fire * 0.05 + proximity * 0.025;
+        // Wave ring boost
+        let waveBoost = 0;
+        if (waveActive && waveOrigin.current) {
+          const d = nodes[i].distanceTo(waveOrigin.current);
+          const ring = Math.abs(d - waveRadius);
+          if (ring < 0.35) {
+            waveBoost = (1 - ring / 0.35) * (1 - waveAge / 1.6);
+            fire = Math.min(1, fire + waveBoost);
+          }
+        }
 
-        // Color: idle = mid, firing = highlight, hover boost too
+        const baseScale = 0.011;
+        let scale = baseScale + fire * 0.05 + proximity * 0.025 + waveBoost * 0.04 + audio * 0.012;
+
+        // Color: idle = mid, firing = highlight
         tmpColor.copy(midColor).lerp(highlightColor, fire);
 
         if (i === flashing) {
           tmpColor.lerp(whiteColor, flashStrength);
           scale += flashStrength * 0.08;
         }
+        if (waveBoost > 0.3) tmpColor.lerp(whiteColor, waveBoost * 0.5);
 
         dummy.position.copy(nodes[i]);
         dummy.scale.setScalar(scale);
