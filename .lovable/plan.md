@@ -1,24 +1,76 @@
 
-**Goal:** Transform background stars from static field into a living deep-space travel scene, scoped only to the existing `BackgroundStars` setup in `src/components/CyberGlobe.tsx`.
+**Goal:** Add a sleep/wake gate in front of the main app. Initial load shows only a centered breathing energy ball. Voice command transitions in/out of the full brain UI.
 
-**Changes (1 file: `src/components/CyberGlobe.tsx`)**
+---
 
-1. **Drifting stars with parallax depth**
-   - Assign each background star a per-star velocity vector + a depth/layer factor (3 layers: far/mid/near).
-   - Far stars drift very slowly, near stars drift faster — creates parallax.
-   - Per frame: update star positions by `velocity * depthFactor * dt`. Wrap stars around a bounding sphere/box so they re-enter from the opposite side (infinite field).
-   - Push updated positions into the star `BufferGeometry` `position` attribute and flag `needsUpdate`.
+### Architecture
 
-2. **Dynamic constellation lines that follow the stars**
-   - Keep the existing nearest-neighbor connection logic, but rebuild the line segment positions every frame from the moved star positions (same index pairs — no re-computation of neighbors, just refresh endpoints).
-   - Lines remain at ~5% white opacity, so they appear to gently breathe with the drift.
+**New: `src/contexts/WakeContext.tsx`**
+- State: `wakePhase: "sleeping" | "waking" | "awake" | "sleeping-out"`
+- Persisted to `localStorage` so refresh returns to last state (default: `sleeping`)
+- Actions: `wake()`, `sleep()`
 
-3. **Warp streaks (subtle passing stars)**
-   - Maintain a small pool (max 3-5 active at a time) of "streak" stars: separate `THREE.Line` segments with additive blending, white, low opacity (~15%).
-   - Spawn one every 2-5s at a random offscreen edge with a high-velocity vector aimed roughly past the camera. Length scales with speed.
-   - Despawn when out of bounds. Capped count keeps it "just a few".
+**New: `src/components/EnergyBall.tsx`**
+- Standalone full-screen `<Canvas>` with black background
+- Single small icosahedron (~size of one brain node, centered) + soft additive halo sprite
+- Color: intelligence-mode gold (`#ffd700`) — same look/feel as brain nodes
+- Behaviors:
+  - Breathes (sine scale) — same rhythm as brain nodes
+  - Slowly rotates on Y axis
+  - Pulses brighter on mic input via `getSpeakingIntensity()` from `brainEvents`
+- Animation phases driven by `wakePhase`:
+  - `sleeping` → idle breathe + rotate
+  - `waking` → quick scale-up flash, particle burst outward (~60 particles fly out + fade), then ball fades out → calls `wake complete`
+  - `sleeping-out` → ball pulses bright, ready to receive (visual only — actual implosion handled on brain side)
 
-4. **Scope guarantee**
-   - All changes live inside the `BackgroundStars` component / setup block. Brain mesh, pulses, shockwave, breathing, and CRT scanline overlay are untouched.
+**New: `src/components/SleepWakeListener.tsx`**
+- Lightweight `SpeechRecognition` always-on listener
+- Phrases:
+  - When `sleeping`: "wake up" / "wolf" / "hey wolf" → `wake()`
+  - When `awake`: "go to sleep" / "sleep" → `sleep()` + call `stopHandsFree()` from `wolfVoice` to kill mic
+- Auto-restarts on `onend`/`onerror` (same pattern as `wolfVoice`)
+- Only one instance mounted at a time to avoid Web Speech conflicts
 
-**Result:** The brain feels suspended in deep space, slowly traveling — distant stars drift gently, near stars slide by faster, faint constellation web flexes with them, and the occasional star streaks past like a warp moment.
+**Modify `src/App.tsx`**
+- Wrap with `<WakeProvider>`
+- Conditional render based on `wakePhase`:
+  - `sleeping` or `waking` → render `<EnergyBall />` + `<SleepWakeListener />` only (no router, no layout)
+  - `awake` → render existing `<BrowserRouter><AppLayout>...</AppLayout></BrowserRouter>` with `animate-fade-in`, plus `<SleepWakeListener />`
+  - `sleeping-out` → render BOTH: AppLayout fading out + brain dissolve animation, then EnergyBall fades in
+- Transition orchestration in a small `useEffect` based on phase
+
+**Modify `src/components/CyberGlobe.tsx` (minimal additive)**
+- Accept optional `dissolving: boolean` prop
+- When `true`: animate all node positions toward center (lerp), shrink scale to 0, fade opacity over ~1s — "black hole" effect
+- When mount happens after wake: brief "forming" animation — nodes scale from 0 → 1 over ~1s with slight outward spawn
+
+**Modify `src/lib/wolfVoice.ts`**
+- No behavioral changes; just ensure `stopHandsFree()` is callable from `SleepWakeListener` (already exported ✓)
+
+---
+
+### Transition Sequences
+
+**Wake** (`sleeping` → `awake`):
+1. User says "wake up" → `wake()` sets phase to `waking`
+2. EnergyBall plays burst animation (~800ms): scale up, particle explosion, fade out
+3. Phase set to `awake` → AppLayout mounts with `fade-in`, brain plays "forming" animation
+
+**Sleep** (`awake` → `sleeping`):
+1. User says "go to sleep" → `sleep()` sets phase to `sleeping-out`, calls `stopHandsFree()`
+2. Brain plays "black hole" dissolve (~1s): nodes spiral to center, shrink, fade
+3. AppLayout fades out simultaneously
+4. EnergyBall fades in at center
+5. Phase set to `sleeping` → only EnergyBall remains
+
+---
+
+### Files
+- **New**: `src/contexts/WakeContext.tsx`
+- **New**: `src/components/EnergyBall.tsx`
+- **New**: `src/components/SleepWakeListener.tsx`
+- **Edit**: `src/App.tsx` (wrap + conditional render)
+- **Edit**: `src/components/CyberGlobe.tsx` (add `dissolving` prop + forming animation)
+
+### Result
+Refresh → black screen, small gold breathing/rotating orb in center, reacts to your voice. Say "wake up" → bursts into particles, brain UI fades in. Say "go to sleep" → brain spirals into orb like a black hole, mic off, only orb remains. State persists across refreshes.
