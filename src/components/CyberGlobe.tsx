@@ -134,7 +134,8 @@ let pulseId = 0;
 function BrainNetwork({ colors }: { colors: ModeColorSet }) {
   const groupRef = useRef<THREE.Group>(null);
   const nodeMeshRef = useRef<THREE.InstancedMesh>(null);
-  const lineMatRef = useRef<THREE.LineBasicMaterial>(null);
+  const lineGeomRef = useRef<THREE.BufferGeometry>(null);
+  const coreMatRef = useRef<THREE.MeshBasicMaterial>(null);
 
   const NODE_COUNT = 560;
   const MAX_EDGES_PER_NODE = 6;
