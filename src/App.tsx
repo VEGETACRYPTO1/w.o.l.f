@@ -37,7 +37,8 @@ function WakeGate() {
       const ey = r.top + r.height / 2;
       const dx = cx - ex;
       const dy = cy - ey;
-      el.style.setProperty("--bh-translate", `translate(${dx}px, ${dy}px)`);
+      el.style.setProperty("--bh-dx", `${dx}px`);
+      el.style.setProperty("--bh-dy", `${dy}px`);
     });
   }, [sucking]);
 
@@ -61,7 +62,7 @@ function WakeGate() {
           </BrowserRouter>
         </div>
       )}
-      {showOrb && <EnergyBall />}
+      {showOrb && <EnergyBall phase={phase} />}
       <SleepWakeListener />
     </>
   );
